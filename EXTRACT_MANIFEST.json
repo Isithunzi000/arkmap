@@ -36,7 +36,7 @@
         4799,
         5552
       ],
-      "sha256": "f1655591f4e24fbf77e19812969ff8caad658bbccf0ca15e9425d643d40ecd13",
+      "sha256": "affefc10ada2215a7269c5b604e5593a210b85065e401e9c35128202d8816f64",
       "note": "EN internal invariant message in _CanonBuf (H0.3)"
     },
     "src/mudlet-dat.js": {

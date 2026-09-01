@@ -135,7 +135,7 @@ lossless.
 
 | function | description |
 |---|---|
-| `validate(map)` | structural validation → `{ ok, errors[], warnings[] }` (errors carry `path` + `msg`) |
+| `validate(map, opts?)` | structural validation → `{ ok, errors[], warnings[] }`; errors carry `{ path, code, msg }` — `code` is stable/machine-readable, `msg` follows `opts.locale` (see [Internationalization](#internationalization)) |
 | `addChecksums(map)` | compute and attach v4 checksums (in place) |
 | `verifyChecksums(map)` | verify → `{ ok, fileOk, metaOk, badAreas[], badRooms[], ... }` |
 | `checkSuppressorsInMap(map)` | data-quality lint: missing custom-line suppressors |
@@ -295,8 +295,9 @@ covering areas, rooms, exits, moves, env colors, custom lines and labels),
 *where* (room/area ids), and the *before/after* state where reverting matters.
 The list is **topologically ordered**, so applying the ops top to bottom never
 breaks references (e.g. rooms are added before exits can point at them, areas
-are deleted last). Each op carries a human-readable `label` (Polish, same as
-ArkMap Studio's history panel). Universal — works on any arkmap-shaped maps,
+are deleted last). Each op carries a human-readable `label`
+(English by default; pass `{ locale: 'pl' }` for Polish labels byte-identical
+to ArkMap Studio's history panel — see [Internationalization](#internationalization)). Universal — works on any arkmap-shaped maps,
 any MUD. Available from the root and under the `arkmap/diff` subpath.
 
 ```js
@@ -393,6 +394,32 @@ The Arkadia map data originates from the community crowd-mapping project at
 File signing (identity registry) is intentionally out of scope; files written
 by this package are unsigned. Signed files can still be read and their
 checksums verified.
+
+## Internationalization
+
+The package is English-first: all code, comments and default output are
+English. Polish is available for **user-facing output** via message catalogs
+(`src/locale.js`, exported as `LOCALES`).
+
+- **Opt-in per call, no global state.** Pass `{ locale: 'pl' }` as the options
+  argument; anything else (including no options) yields English.
+  `resolveLocale(locale)` maps only the exact string `'pl'` to Polish and
+  everything else to English.
+- **`diffMaps(src, dst, { locale: 'pl' })`** — op `label`s in Polish,
+  byte-identical to ArkMap Studio's history panel (including correct Polish
+  plural forms via `plural()`).
+- **`validate(map, { locale: 'pl' })`** — error/warning `msg` in Polish. The
+  error shape is `{ path, code, msg }`: `code` is a stable machine-readable
+  identifier (e.g. `INVALID_DIRECTION`, `TARGET_NOT_FOUND`) independent of the
+  locale, `msg` is the localized rendering.
+- **`.dat` import errors** (`datToArkmap`, `readMudletDat`) always throw
+  English messages with a machine `code` property (`DAT_TRUNCATED`,
+  `DAT_NEGATIVE_COUNT`, `DAT_UNSUPPORTED_VERSION`) — parser errors are
+  developer-facing, not end-user output.
+- `translate(key, params, locale)` resolves a catalog key with `{param}`
+  substitution (PL falls back to EN for missing keys; an unknown EN key
+  throws). `plural(locale, n, formsKey)` implements CLDR plural rules
+  (Polish one/few/many, English one/other).
 
 ## License
 

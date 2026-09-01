@@ -397,7 +397,7 @@ class _CanonBuf {
     this.dv.setUint32(this.n, w, true);
     this.n = o + w;
   }
-  u64raw(p) {                                                      // surowy hash XXH3-64 (para [hi,lo]) jako 8 B LE — do rollupów
+  u64raw(p) {                                                      // raw XXH3-64 hash ([hi,lo] pair) as 8 B LE — for rollups
     if (this.n + 8 > this.b.length) this._cap(8);
     this.dv.setUint32(this.n, p[1], true);
     this.dv.setUint32(this.n + 4, p[0], true);

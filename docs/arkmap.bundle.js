@@ -1635,7 +1635,7 @@ function ansiPaletteRgb(envId) {
 // Source: Isithunzi000/arkadia-web_standalone-arkmap_studio/arkmap_studio.html @ 24bd9022895753779758e5c58286565c76d85d19 (lines 8049-8054)
 // Bodies are byte-verbatim from the app; only import/export plumbing is added.
 
-// ─── OPPOSITE — mapa kierunków przeciwnych (Pass 68, S8) ─────────────────────
+// ─── OPPOSITE — opposite-direction map (Pass 68, S8) ─────────────────────────
 const OPPOSITE = {
   n:'s', s:'n', e:'w', w:'e',
   ne:'sw', sw:'ne', nw:'se', se:'nw',
@@ -3414,7 +3414,7 @@ class _CanonBuf {
     this.dv.setUint32(this.n, w, true);
     this.n = o + w;
   }
-  u64raw(p) {                                                      // surowy hash XXH3-64 (para [hi,lo]) jako 8 B LE — do rollupów
+  u64raw(p) {                                                      // raw XXH3-64 hash ([hi,lo] pair) as 8 B LE — for rollups
     if (this.n + 8 > this.b.length) this._cap(8);
     this.dv.setUint32(this.n, p[1], true);
     this.dv.setUint32(this.n + 4, p[0], true);
@@ -3786,7 +3786,7 @@ function stableStringify(val, indent, _lvl) {
   const pad0 = ' '.repeat(indent * _lvl);
   if (Array.isArray(val)) {
     if (!val.length) return '[]';
-    // Tablice prymitywów (≤8 el.) → inline: [255, 0, 0] | [32.7281, -7.9983]
+    // Primitive arrays (<=8 items) -> inline: [255, 0, 0] | [32.7281, -7.9983]
     if (val.length <= 8 && val.every(v => v === null || typeof v !== 'object')) {
       return '[' + val.map(v => JSON.stringify(v)).join(', ') + ']';
     }

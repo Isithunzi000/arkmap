@@ -2,7 +2,7 @@
 // Source: Isithunzi000/arkadia-web_standalone-arkmap_studio/arkmap_studio.html @ 24bd9022895753779758e5c58286565c76d85d19 (lines 8049-8054)
 // Bodies are byte-verbatim from the app; only import/export plumbing is added.
 
-// ─── OPPOSITE — mapa kierunków przeciwnych (Pass 68, S8) ─────────────────────
+// ─── OPPOSITE — opposite-direction map (Pass 68, S8) ─────────────────────────
 const OPPOSITE = {
   n:'s', s:'n', e:'w', w:'e',
   ne:'sw', sw:'ne', nw:'se', se:'nw',

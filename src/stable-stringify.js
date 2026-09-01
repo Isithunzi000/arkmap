@@ -9,7 +9,7 @@ function stableStringify(val, indent, _lvl) {
   const pad0 = ' '.repeat(indent * _lvl);
   if (Array.isArray(val)) {
     if (!val.length) return '[]';
-    // Tablice prymitywów (≤8 el.) → inline: [255, 0, 0] | [32.7281, -7.9983]
+    // Primitive arrays (<=8 items) -> inline: [255, 0, 0] | [32.7281, -7.9983]
     if (val.length <= 8 && val.every(v => v === null || typeof v !== 'object')) {
       return '[' + val.map(v => JSON.stringify(v)).join(', ') + ']';
     }

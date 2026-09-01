@@ -23,7 +23,7 @@
   },
   "scripts": {
     "extract": "node scripts/extract.mjs",
-    "test": "node --test tests/",
+    "test": "node scripts/run-tests.mjs",
     "parity": "node scripts/extract.mjs --check"
   },
   "repository": {

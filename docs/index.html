@@ -23,7 +23,8 @@
   canvas:active { cursor: grabbing; }
   #drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20,23,28,.85); font-size: 18px; color: #93c5fd; border: 2px dashed #2563eb; }
   #drop.on { display: flex; }
-  #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5c6470; text-align: center; pointer-events: none; }
+  #empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: #5c6470; text-align: center; line-height: 1.6; pointer-events: none; }
+  #empty code { display: inline-block; vertical-align: baseline; background: #1e232b; padding: 1px 6px; border-radius: 4px; line-height: inherit; }
   code { background: #1e232b; padding: 1px 6px; border-radius: 4px; }
   #progress { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20,23,28,.72); }
   #progress.on { display: flex; }
@@ -46,7 +47,7 @@
 </header>
 <div id="wrap">
   <canvas id="cv"></canvas>
-  <div id="empty">Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.<br>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div>
+  <div id="empty"><div>Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.</div><div>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div></div>
   <div id="progress"><div class="box"><div class="label">loading…</div><div class="track"><div class="bar"></div></div></div></div>
   <div id="drop">drop to load</div>
 </div>

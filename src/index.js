@@ -52,6 +52,9 @@ export {
   ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX, encodeRoute, decodeRoute,
 } from './waypoints.js';
 
+// message catalogs (en default, pl optional) — user-facing output of the package
+export { LOCALES, resolveLocale, translate, plural } from './locale.js';
+
 // universal map diff — ordered arkdelta-style op list between two maps
 export { diffMaps } from './diff.js';
 

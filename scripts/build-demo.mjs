@@ -19,7 +19,7 @@ const ORDER = [
   'mudlet-dat.js', 'validate.js', 'checksum.js', 'stable-stringify.js',
   'canonicalize.js', 'dat-to-arkmap.js', 'arkmap-to-dat.js',
   'suppressors.js', 'transports.js', 'arkmap.js', 'graph.js', 'waypoints.js',
-  'diff.js', 'search-index.js', 'render-svg.js', 'render-png.js',
+  'locale.js', 'diff.js', 'search-index.js', 'render-svg.js', 'render-png.js',
 ];
 
 const FOOTER = `

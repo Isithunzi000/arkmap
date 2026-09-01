@@ -13,6 +13,7 @@
   header h1 span { color: #6f7684; font-weight: 400; }
   .btn { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
   .btn:hover { background: #1d4fd7; }
+  select { background: #1e232b; color: #dde3ea; border: 1px solid #2a3038; border-radius: 6px; padding: 6px 8px; font-size: 13px; max-width: 260px; }
   #status { color: #8b93a1; font-size: 13px; }
   #status.ok { color: #4ade80; }
   #status.warn { color: #fbbf24; }
@@ -31,6 +32,8 @@
   <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
+  <select id="selArea" hidden></select>
+  <select id="selZ" hidden></select>
   <span id="status">no map loaded — drop a file anywhere</span>
 </header>
 <div id="wrap">
@@ -44,7 +47,14 @@
 const A = globalThis.arkmap;
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const statusEl = document.getElementById('status'), emptyEl = document.getElementById('empty');
+const selArea = document.getElementById('selArea'), selZ = document.getElementById('selZ');
 let map = null, view = { x: 0, y: 0, scale: 14 };
+let roomIdx = new Map();          // roomId -> { room, areaId }
+let scope = { areaId: 'all', z: null };
+
+// Mudlet direction deltas (data coords; screen Y is negated at draw time)
+const DELTA = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
+const INNER = new Set(['up', 'down', 'in', 'out']);
 
 function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = cls || ''; }
 
@@ -66,6 +76,22 @@ function envColor(env, colors) {
   return c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#3a4150';
 }
 
+function visible(room, areaId) {
+  if (scope.areaId !== 'all' && areaId !== scope.areaId) return false;
+  if (scope.z !== null && (room.z ?? 0) !== scope.z) return false;
+  return true;
+}
+
+function roomsInScope() {
+  const out = [];
+  for (const area of map?.areas || []) {
+    for (const room of area.rooms || []) {
+      if (visible(room, area.id)) out.push(room);
+    }
+  }
+  return out;
+}
+
 function draw() {
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -74,19 +100,39 @@ function draw() {
   ctx.save();
   ctx.translate(W / 2 + view.x, H / 2 + view.y);
   ctx.scale(view.scale, view.scale);
+
+  const vis = roomsInScope();
+  const visIds = new Set(vis.map(r => r.id));
+
+  // exits: full lines inside the scope, short stubs for connections leaving it
   ctx.lineWidth = 0.15; ctx.strokeStyle = '#565e6b';
-  for (const area of map.areas || []) {
-    for (const room of area.rooms || []) {
-      for (const [dir, tgt] of Object.entries(room.exits || {})) {
-        const t = (area.rooms || []).find(r => r.id === tgt);
-        if (t) { ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.x, -t.y); ctx.stroke(); }
+  const stub = (r, dir) => {
+    const d = DELTA[dir]; if (!d) return;
+    ctx.beginPath(); ctx.moveTo(r.x, -r.y); ctx.lineTo(r.x + d[0] * 0.45, -(r.y + d[1] * 0.45)); ctx.stroke();
+  };
+  for (const room of vis) {
+    for (const [dir, tgt] of Object.entries(room.exits || {})) {
+      const t = roomIdx.get(tgt);
+      if (t && visIds.has(t.room.id)) {
+        ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.room.x, -t.room.y); ctx.stroke();
+      } else {
+        stub(room, dir);
       }
     }
   }
-  for (const area of map.areas || []) {
-    for (const room of area.rooms || []) {
-      ctx.fillStyle = envColor(room.env, map.colors);
-      ctx.beginPath(); ctx.arc(room.x, -room.y, 0.38, 0, 7); ctx.fill();
+
+  // rooms
+  for (const room of vis) {
+    ctx.fillStyle = envColor(room.env, map.colors);
+    ctx.beginPath(); ctx.arc(room.x, -room.y, 0.38, 0, 7); ctx.fill();
+    // inner exits (up/down/in/out): small hollow diamond marker
+    const hasInner = Object.keys(room.exits || {}).some(d => INNER.has(d));
+    if (hasInner) {
+      ctx.strokeStyle = '#aab2c0'; ctx.lineWidth = 0.12;
+      ctx.beginPath();
+      ctx.moveTo(room.x, -room.y - 0.62); ctx.lineTo(room.x + 0.3, -room.y - 0.32);
+      ctx.lineTo(room.x, -room.y - 0.02); ctx.lineTo(room.x - 0.3, -room.y - 0.32);
+      ctx.closePath(); ctx.stroke();
     }
   }
   ctx.restore();
@@ -94,7 +140,7 @@ function draw() {
 
 function fit() {
   if (!map) return;
-  const pts = (map.areas || []).flatMap(a => a.rooms || []);
+  const pts = roomsInScope();
   if (!pts.length) return;
   const xs = pts.map(r => r.x), ys = pts.map(r => -r.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -104,39 +150,95 @@ function fit() {
   view.y = -(minY + maxY) / 2 * view.scale;
 }
 
+function populateSelectors() {
+  const areas = (map.areas || []).filter(a => (a.rooms || []).length > 0);
+  areas.sort((a, b) => b.rooms.length - a.rooms.length);
+  const total = areas.reduce((s, a) => s + a.rooms.length, 0);
+  selArea.innerHTML = '';
+  const all = document.createElement('option');
+  all.value = 'all'; all.textContent = `All areas (${total} rooms)`;
+  selArea.appendChild(all);
+  for (const a of areas) {
+    const o = document.createElement('option');
+    o.value = String(a.id);
+    o.textContent = `${a.name || 'area ' + a.id} — ${a.rooms.length} rooms`;
+    selArea.appendChild(o);
+  }
+  // default: largest area (Mudlet-style: one area at a time)
+  scope.areaId = areas.length ? areas[0].id : 'all';
+  selArea.value = String(scope.areaId);
+  populateZ(true);
+  selArea.hidden = selZ.hidden = false;
+}
+
+function populateZ(reset) {
+  // z values within the current area scope
+  const counts = new Map();
+  for (const area of map.areas || []) {
+    if (scope.areaId !== 'all' && area.id !== scope.areaId) continue;
+    for (const room of area.rooms || []) {
+      const z = room.z ?? 0;
+      counts.set(z, (counts.get(z) || 0) + 1);
+    }
+  }
+  const zs = [...counts.entries()].sort((a, b) => b[1] - a[1]); // most populated first
+  selZ.innerHTML = '';
+  for (const [z, n] of [...zs].sort((a, b) => a[0] - b[0])) {
+    const o = document.createElement('option');
+    o.value = String(z); o.textContent = `z = ${z} (${n} rooms)`;
+    selZ.appendChild(o);
+  }
+  scope.z = zs.length ? zs[0][0] : null;   // default: most populated level
+  if (scope.z !== null) selZ.value = String(scope.z);
+}
+
+selArea.onchange = () => {
+  scope.areaId = selArea.value === 'all' ? 'all' : parseInt(selArea.value);
+  populateZ(true); fit(); draw();
+};
+selZ.onchange = () => { scope.z = parseInt(selZ.value); fit(); draw(); };
+
 let drag = null;
 cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => { if (!drag) return; view.x += e.clientX - drag.x; view.y += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; draw(); });
 cv.addEventListener('pointerup', () => { drag = null; });
 cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
 
+function afterLoad(fileName, msg, cls) {
+  roomIdx = new Map();
+  for (const area of map.areas || []) {
+    for (const room of area.rooms || []) roomIdx.set(room.id, { room, areaId: area.id });
+  }
+  emptyEl.style.display = 'none';
+  setStatus(msg, cls);
+  populateSelectors();
+  fit(); draw();
+}
+
+function loadArkmapText(fileName, text) {
+  const { map: m, validation, checksums } = A.loadArkmap(text);
+  map = m;
+  const rooms = (m.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
+  if (!validation.ok) afterLoad(fileName, `${fileName} — ${validation.errors.length} validation error(s), first: ${validation.errors[0].path} ${validation.errors[0].msg}`, 'err');
+  else if (checksums.present && !checksums.ok) afterLoad(fileName, `${fileName} — ${rooms} rooms — CHECKSUM MISMATCH`, 'err');
+  else if (checksums.present) afterLoad(fileName, `${fileName} — ${rooms} rooms — checksums OK [v4]`, 'ok');
+  else afterLoad(fileName, `${fileName} — ${rooms} rooms — no checksums in file`, 'warn');
+}
+
+function loadDatBuffer(fileName, buf) {
+  map = A.datToArkmap(buf);
+  const rooms = (map.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
+  afterLoad(fileName, `${fileName} — ${rooms} rooms — .dat converted by arkmap`, 'ok');
+}
+
 function loadFile(file) {
   const reader = new FileReader();
   reader.onerror = () => setStatus('read error', 'err');
   if (/\.arkmap$/i.test(file.name)) {
-    reader.onload = () => {
-      try {
-        const { map: m, validation, checksums } = A.loadArkmap(reader.result);
-        map = m; emptyEl.style.display = 'none';
-        const rooms = (m.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
-        if (!validation.ok) setStatus(`${file.name} — ${validation.errors.length} validation error(s), first: ${validation.errors[0].path} ${validation.errors[0].msg}`, 'err');
-        else if (checksums.present && !checksums.ok) setStatus(`${file.name} — ${rooms} rooms — CHECKSUM MISMATCH`, 'err');
-        else if (checksums.present) setStatus(`${file.name} — ${rooms} rooms — checksums OK [v4]`, 'ok');
-        else setStatus(`${file.name} — ${rooms} rooms — no checksums in file`, 'warn');
-        fit(); draw();
-      } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); }
-    };
+    reader.onload = () => { try { loadArkmapText(file.name, reader.result); } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); } };
     reader.readAsText(file);
   } else {
-    reader.onload = () => {
-      try {
-        map = A.datToArkmap(reader.result);
-        emptyEl.style.display = 'none';
-        const rooms = (map.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
-        setStatus(`${file.name} — ${rooms} rooms — .dat converted by arkmap`, 'ok');
-        fit(); draw();
-      } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); }
-    };
+    reader.onload = () => { try { loadDatBuffer(file.name, reader.result); } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); } };
     reader.readAsArrayBuffer(file);
   }
 }
@@ -147,6 +249,18 @@ const dropEl = document.getElementById('drop');
 addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('on'); });
 addEventListener('dragleave', e => { if (e.relatedTarget === null) dropEl.classList.remove('on'); });
 addEventListener('drop', e => { e.preventDefault(); dropEl.classList.remove('on'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+// optional: load a map by URL — ?src=https://…/map.arkmap (or .dat)
+const srcParam = new URLSearchParams(location.search).get('src');
+if (srcParam) {
+  setStatus('fetching ' + srcParam + ' …');
+  fetch(srcParam).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const name = srcParam.split('/').pop() || 'remote map';
+    if (/\.arkmap($|\?)/i.test(srcParam)) return r.text().then(t => loadArkmapText(name, t));
+    return r.arrayBuffer().then(b => loadDatBuffer(name, b));
+  }).catch(e => setStatus('fetch failed — ' + e.message, 'err'));
+}
 
 resize();
 </script>

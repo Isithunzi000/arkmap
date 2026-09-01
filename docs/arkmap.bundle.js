@@ -5293,7 +5293,8 @@ function plural(locale, n, formsKey) {
 //             DELETE_EXIT/ADD_EXIT, EDIT_EXIT, PAINT_BATCH, ADD_CL/EDIT_CL/
 //             DELETE_CL, ADD_LABEL/EDIT_LABEL/MOVE_LABEL/RESIZE_LABEL/
 //             DELETE_LABEL, DELETE_AREA); every op carries a human-readable
-//             `label` (Polish, same as ArkMap Studio's history panel).
+//             `label` (English by default; pass { locale: 'pl' } for Polish —
+//             PL labels are byte-identical to ArkMap Studio's history panel).
 //   stats   — per-op-type counts.
 //   overlap — room-id kinship ratio (0..1): a guard against diffing two
 //             unrelated maps (low overlap = probably not the same map).
@@ -5370,20 +5371,21 @@ function _diffBeforeSnapshot(srcRoom, deletedRooms, posRoom) {
   return b;
 }
 
-function _diffClLabel(kind, cl, name, id, dir) {
+function _diffClLabel(msg, kind, cl, name, id, dir) {
   const supp = _deltaIsSuppressor(cl);
-  if (kind === 'add') return supp
-    ? `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${id})`
-    : `Dodano CL dir=${dir} w pokoju "${name}" (#${id})`;
-  if (kind === 'del') return `Usunięcie ${supp ? 'pustej custom line' : 'CL'} dir=${dir} w pokoju "${name}" (#${id})`;
-  return `Edycja CL dir=${dir} w pokoju "${name}" (#${id})`;
+  const p = { dir, name, id };
+  if (kind === 'add') return msg(supp ? 'diff.addSuppressor' : 'diff.addCL', p);
+  if (kind === 'del') return msg(supp ? 'diff.delSuppressor' : 'diff.delCL', p);
+  return msg('diff.editCL', p);
 }
 
 const _DIFF_EXIT_FAM  = ['exits','special_exits','doors','exit_weights','exit_locks','special_exit_locks','stubs'];
 const _DIFF_PAINT_FAM = ['env','symbol'];
 const _DIFF_RESID_SKIP = ['x','y','z','custom_lines'].concat(_DIFF_EXIT_FAM, _DIFF_PAINT_FAM);
 
-function diffMaps(srcMap, dstMap) {
+function diffMaps(srcMap, dstMap, opts) {
+  const loc = opts && opts.locale;
+  const msg = (key, params) => translate(key, params, loc);
   const stats = { addArea:0, editArea:0, delArea:0, envColor:0, addRoom:0, editRoom:0, delRoom:0,
     moveRoom:0, moveArea:0, addExit:0, editExit:0, delExit:0, paintRooms:0, paintBatches:0,
     addCL:0, editCL:0, delCL:0, addLabel:0, editLabel:0, delLabel:0, moveLabel:0, resizeLabel:0 };
@@ -5413,18 +5415,18 @@ function diffMaps(srcMap, dstMap) {
     if (sA && !dA) {
       deletedAreas.add(id);
       out.delArea.push({ type:'DELETE_AREA', areaId:id, snapshot:{ name: sA.name || '' },
-        label:`Usunięcie obszaru "${sA.name || '#' + id}"` }); stats.delArea++;
+        label: msg('diff.delArea', { name: sA.name || '#' + id }) }); stats.delArea++;
     } else if (!sA && dA) {
       const areaData = JSON.parse(JSON.stringify(dA));
       delete areaData.rooms; delete areaData.labels;
       out.addArea.push({ type:'ADD_AREA', areaId:id, areaData,
-        label:`Dodanie obszaru "${dA.name || '#' + id}"` }); stats.addArea++;
+        label: msg('diff.addArea', { name: dA.name || '#' + id }) }); stats.addArea++;
     } else {
       const bs = { name: sA.name || '', user_data: sA.user_data || {} };
       const bd = { name: dA.name || '', user_data: dA.user_data || {} };
       if (!_diffEq(bs, bd)) {
         out.editArea.push({ type:'EDIT_AREA', areaId:id, before:bs, after:bd,
-          label:`Edycja obszaru "${dA.name || sA.name || '#' + id}"` }); stats.editArea++;
+          label: msg('diff.editArea', { name: dA.name || sA.name || '#' + id }) }); stats.editArea++;
       }
     }
   }
@@ -5439,7 +5441,7 @@ function diffMaps(srcMap, dstMap) {
     const envId = isFinite(+envKey) ? +envKey : envKey;
     out.envColor.push({ type:'EDIT_ENV_COLOR', envId,
       oldColor: o ? [...o] : null, newColor: n ? [...n] : null,
-      label: n ? `Zmiana koloru env ${envId} → rgb(${n.join(',')})` : `Przywróć domyślny kolor env ${envId}` });
+      label: n ? msg('diff.envColorSet', { envId, rgb: n.join(',') }) : msg('diff.envColorReset', { envId }) });
     stats.envColor++;
   }
 
@@ -5455,13 +5457,13 @@ function diffMaps(srcMap, dstMap) {
     if (s && !d) {
       out.delRoom.push({ type:'DELETE_ROOM', roomId:id, areaId:s.areaId,
         snapshot: JSON.parse(JSON.stringify(s.room)),
-        label:`Usunięcie pokoju "${s.room.name || '#' + id}" (#${id})` });
+        label: msg('diff.delRoom', { name: s.room.name || '#' + id, id }) });
       stats.delRoom++;
       continue;
     }
     if (!s && d) {
       out.addRoom.push({ type:'ADD_ROOM', roomId:id, roomData: JSON.parse(JSON.stringify(d.room)), areaId:d.areaId,
-        label:`Dodanie pokoju "${d.room.name || ''}" (#${id})` });
+        label: msg('diff.addRoom', { name: d.room.name || '', id }) });
       stats.addRoom++;
       continue;
     }
@@ -5482,7 +5484,7 @@ function diffMaps(srcMap, dstMap) {
 
     if (areaChanged) {
       out.moveArea.push({ type:'MOVE_ROOM_TO_AREA', roomId:id, fromAreaId:s.areaId, toAreaId:d.areaId,
-        label:`Przeniesienie pokoju "${name}" (#${id}) do obszaru "${(dstAreas.get(d.areaId) || {}).name || '#' + d.areaId}"` });
+        label: msg('diff.moveRoomToArea', { name, id, areaName: (dstAreas.get(d.areaId) || {}).name || '#' + d.areaId }) });
       stats.moveArea++;
     }
 
@@ -5491,7 +5493,7 @@ function diffMaps(srcMap, dstMap) {
       out.roomOps.push({ type:'EDIT_ROOM', roomId:id,
         before: _diffBeforeSnapshot(s.room, deletedRooms, s.room),
         after: JSON.parse(JSON.stringify(d.room)),
-        label:`Edycja pokoju "${name}" (#${id})` });
+        label: msg('diff.editRoom', { name, id }) });
       stats.editRoom++;
       continue;
     }
@@ -5515,11 +5517,11 @@ function diffMaps(srcMap, dstMap) {
               lock: (cs.exit_locks || []).includes(dir) ? dir : undefined,
               door: (cs.doors || {})[dir], hasStub: (cs.stubs || []).includes(dir),
               cl: clS[dir] ? JSON.parse(JSON.stringify(clS[dir])) : undefined },
-            label:`Usunięcie wyjścia ${dir} z #${id}` });
+            label: msg('diff.delExit', { dir, id }) });
           stats.delExit++;
         } else if (sT === undefined && dT !== undefined) {
           out.roomOps.push({ type:'ADD_EXIT', sourceId:id, dir, targetId:dT, bidirectional:false,
-            label:`Dodanie wyjścia ${dir} → #${dT} (z #${id})` });
+            label: msg('diff.addExit', { dir, target: dT, id }) });
           stats.addExit++;
         } else if (sT !== dT) {
           delExitDirs.add(dir);
@@ -5528,9 +5530,9 @@ function diffMaps(srcMap, dstMap) {
               lock: (cs.exit_locks || []).includes(dir) ? dir : undefined,
               door: (cs.doors || {})[dir], hasStub: (cs.stubs || []).includes(dir),
               cl: clS[dir] ? JSON.parse(JSON.stringify(clS[dir])) : undefined },
-            label:`Usunięcie wyjścia ${dir} z #${id}` });
+            label: msg('diff.delExit', { dir, id }) });
           out.roomOps.push({ type:'ADD_EXIT', sourceId:id, dir, targetId:dT, bidirectional:false,
-            label:`Dodanie wyjścia ${dir} → #${dT} (z #${id})` });
+            label: msg('diff.addExit', { dir, target: dT, id }) });
           stats.delExit++; stats.addExit++;
         }
       }
@@ -5553,8 +5555,8 @@ function diffMaps(srcMap, dstMap) {
         before: _diffBeforeSnapshot(s.room, deletedRooms, d.room),
         after: JSON.parse(JSON.stringify(d.room)),
         label: sd.length === 1
-          ? `Edycja wyjścia ${sd[0]} w pokoju "${name}" (#${id})`
-          : `Edycja wyjść w pokoju "${name}" (#${id})` });
+          ? msg('diff.editExit', { dir: sd[0], name, id })
+          : msg('diff.editExits', { name, id }) });
       stats.editExit++;
     } else {
       if (paintDiffer) {
@@ -5571,16 +5573,16 @@ function diffMaps(srcMap, dstMap) {
           const dC = clD[dir];
           if (sC && !dC) {
             out.roomOps.push({ type:'DELETE_CL', roomId:id, dir, snapshot: JSON.parse(JSON.stringify(sC)),
-              label: _diffClLabel('del', sC, name, id, dir) });
+              label: _diffClLabel(msg, 'del', sC, name, id, dir) });
             stats.delCL++;
           } else if (!sC && dC) {
             out.roomOps.push({ type:'ADD_CL', roomId:id, dir, snapshot: JSON.parse(JSON.stringify(dC)),
-              label: _diffClLabel('add', dC, name, id, dir) });
+              label: _diffClLabel(msg, 'add', dC, name, id, dir) });
             stats.addCL++;
           } else if (sC && dC && !_diffEq(sC, dC)) {
             out.roomOps.push({ type:'EDIT_CL', roomId:id, dir,
               before: JSON.parse(JSON.stringify(sC)), after: JSON.parse(JSON.stringify(dC)),
-              label: _diffClLabel('edit', dC, name, id, dir) });
+              label: _diffClLabel(msg, 'edit', dC, name, id, dir) });
             stats.editCL++;
           }
         }
@@ -5610,7 +5612,7 @@ function diffMaps(srcMap, dstMap) {
       if (occupant === undefined || occupant === m.id) {
         moveOps.push({ type:'MOVE_ROOM', roomId:m.id,
           fromX:m.from.x, fromY:m.from.y, fromZ:m.from.z, toX:m.to.x, toY:m.to.y, toZ:m.to.z,
-          label:`Przesunięcie pokoju "${m.name}" (#${m.id})` });
+          label: msg('diff.moveRoom', { name: m.name, id: m.id }) });
         occ.delete(occKey(m.area, m.from.x, m.from.y, m.from.z));
         occ.set(toKey, m.id);
         stats.moveRoom++;
@@ -5629,7 +5631,7 @@ function diffMaps(srcMap, dstMap) {
       moveOps.push({ type:'EDIT_ROOM', roomId:m.id,
         before: _diffBeforeSnapshot(srcRoom, deletedRooms, srcRoom),
         after,
-        label:`Przesunięcie pokoju "${m.name}" (#${m.id})` });
+        label: msg('diff.moveRoom', { name: m.name, id: m.id }) });
       occ.delete(occKey(m.area, m.from.x, m.from.y, m.from.z));
       occ.set(occKey(m.area, m.to.x, m.to.y, m.to.z), m.id);
       stats.moveRoom++;
@@ -5644,7 +5646,7 @@ function diffMaps(srcMap, dstMap) {
     const changes = paintGroups.get(key).sort((a, b) => a.roomId - b.roomId);
     const n = changes.length;
     paintOps.push({ type:'PAINT_BATCH', changes,
-      label:`Malowanie — ${n} ${n === 1 ? 'pokój' : 'pokoi'}` });
+      label: msg('diff.paintBatch', { n, rooms: plural(loc, n, 'words.room') }) });
     stats.paintBatches++; stats.paintRooms += n;
   }
 
@@ -5661,11 +5663,11 @@ function diffMaps(srcMap, dstMap) {
       const nm = (d && d.text) || (s && s.text) || ('#' + lid);
       if (s && !d) {
         out.labelDel.push({ type:'DELETE_LABEL', areaId:aid, snapshot: JSON.parse(JSON.stringify(s)),
-          label:`Usunięcie etykiety "${nm}" (#${lid})` });
+          label: msg('diff.delLabel', { name: nm, id: lid }) });
         stats.delLabel++;
       } else if (!s && d) {
         out.labelAdd.push({ type:'ADD_LABEL', areaId:aid, snapshot: JSON.parse(JSON.stringify(d)),
-          label:`Dodanie etykiety "${nm}" (#${lid})` });
+          label: msg('diff.addLabel', { name: nm, id: lid }) });
         stats.addLabel++;
       } else if (!_diffEq(s, d)) {
         const posCh  = (s.x !== d.x) || (s.y !== d.y);
@@ -5674,17 +5676,17 @@ function diffMaps(srcMap, dstMap) {
         if (restCh) {
           out.labelEdit.push({ type:'EDIT_LABEL', areaId:aid, labelId:lid,
             before: JSON.parse(JSON.stringify(s)), after: JSON.parse(JSON.stringify(d)),
-            label:`Edycja etykiety "${nm}" (#${lid})` });
+            label: msg('diff.editLabel', { name: nm, id: lid }) });
           stats.editLabel++;
         } else if (sizeCh) {
           out.labelEdit.push({ type:'RESIZE_LABEL', areaId:aid, labelId:lid,
             fromW:s.width, fromH:s.height, fromX:s.x, fromY:s.y, toW:d.width, toH:d.height, toX:d.x, toY:d.y,
-            label:`Resize etykiety "${nm}" (#${lid})` });
+            label: msg('diff.resizeLabel', { name: nm, id: lid }) });
           stats.resizeLabel++;
         } else if (posCh) {
           out.labelEdit.push({ type:'MOVE_LABEL', areaId:aid, labelId:lid,
             fromX:s.x, fromY:s.y, toX:d.x, toY:d.y,
-            label:`Przesunięcie etykiety "${nm}" (#${lid})` });
+            label: msg('diff.moveLabel', { name: nm, id: lid }) });
           stats.moveLabel++;
         }
       }

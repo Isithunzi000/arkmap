@@ -122,17 +122,40 @@ test('custom lines: add / delete / edit incl. suppressor labels', () => {
   const supp = { points: [], color: [0, 0, 0] };
   const withExit = (extra) => mkMap([mkRoom(1, { exits: { e: 2 }, ...extra }), mkRoom(2, { exits: { w: 1 } })]);
 
-  let d = diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }));
+  let d = diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }), { locale: 'pl' });
   assert.deepEqual(d.entries.map(e => e.type), ['ADD_CL']);
   assert.match(d.entries[0].label, /Dodano CL/);
 
-  d = diffMaps(withExit({ custom_lines: { e: supp } }), withExit({}));
+  d = diffMaps(withExit({ custom_lines: { e: supp } }), withExit({}), { locale: 'pl' });
   assert.deepEqual(d.entries.map(e => e.type), ['DELETE_CL']);
   assert.match(d.entries[0].label, /pustej custom line/);
 
   d = diffMaps(withExit({ custom_lines: { e: cl } }),
                withExit({ custom_lines: { e: { points: [{ x: 9, y: 9 }], color: [1, 2, 3] } } }));
   assert.deepEqual(d.entries.map(e => e.type), ['EDIT_CL']);
+});
+
+test('i18n: labels default to English, locale pl switches catalog', () => {
+  const cl = { points: [{ x: 1, y: 1 }, { x: 2, y: 2 }], color: [1, 2, 3] };
+  const withExit = (extra) => mkMap([mkRoom(1, { exits: { e: 2 }, ...extra }), mkRoom(2, { exits: { w: 1 } })]);
+  const mk = () => diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }));
+
+  // default (no opts, and opts without locale) -> English
+  assert.match(mk().entries[0].label, /^Add CL dir=e in room "R1" \(#1\)$/);
+  assert.match(diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }), {}).entries[0].label, /^Add CL/);
+  assert.match(diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }), { locale: 'en' }).entries[0].label, /^Add CL/);
+
+  // explicit Polish -> Studio-pinned wording
+  assert.match(diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }), { locale: 'pl' }).entries[0].label, /^Dodano CL/);
+
+  // unknown locale falls back to English
+  assert.match(diffMaps(withExit({}), withExit({ custom_lines: { e: cl } }), { locale: 'de' }).entries[0].label, /^Add CL/);
+
+  // plural rendering follows the locale (PL 2-4 uses "pokoje", EN always "rooms" here)
+  const pa = mkMap([mkRoom(1), mkRoom(2)]);
+  const pb = mkMap([mkRoom(1, { env: 3 }), mkRoom(2, { env: 3 })]);
+  assert.match(diffMaps(pa, pb).entries[0].label, /^Recolor — 2 rooms$/);
+  assert.match(diffMaps(pa, pb, { locale: 'pl' }).entries[0].label, /^Malowanie — 2 pokoje$/);
 });
 
 test('labels: add / delete / move / resize / edit', () => {

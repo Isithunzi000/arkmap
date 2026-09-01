@@ -305,7 +305,7 @@ import { diffMaps } from 'arkmap/diff';
 
 const { entries, stats, overlap, srcRooms, dstRooms } = diffMaps(oldMap, newMap);
 // entries — ordered, deterministic ops; each carries a human-readable `label`
-//           (Polish, same as ArkMap Studio's history panel)
+//           (English default; { locale: 'pl' } for Studio-pinned Polish)
 // stats   — per-op-type counts
 // overlap — room-id kinship ratio 0..1: a low value warns you are probably
 //           diffing two unrelated maps
@@ -320,6 +320,41 @@ Semantics worth knowing:
 - **Move cycles** — swapping two rooms' positions breaks the collision cycle
   with one `EDIT_ROOM` fallback, then the rest resolves as `MOVE_ROOM`.
 - **Deterministic** — same input pair, byte-identical output.
+
+#### Edit deltas (.arkdelta)
+
+`.arkdelta` is the edit-delta format of ArkMap Studio: an ordered op log
+(25 op types) cut against a base map, with canonical XXH3-64 integrity
+checksums and optional Ed25519 author signatures. The package ships the
+**reader side**: fail-closed validation, signature verification and base
+identity. Available from the root and under the `arkmap/delta` subpath.
+
+| function | description |
+|---|---|
+| `validateDeltaText(text, opts?)` | parse + validate → `{ ok, errors[], codes[], delta? }`; never throws; `errors` follow `opts.locale`, `codes` are stable machine names |
+| `verifyDeltaSignature(delta)` | async Ed25519 verification → `{ state: 'unsigned' \| 'claimed' \| 'ok' \| 'bad', ... }`; never refuses the load |
+| `computeBaseInfo(map, precomputed?)` | base-map identity for `meta.base` comparison → `{ crc, version?, revision?, areas }` |
+| `deltaChecksums(meta, ops)` | canonical integrity sums `{ file, ops[] }` |
+
+Constants: `ARKDELTA_FORMAT` (`'arkdelta'`) · `ARKDELTA_FORMAT_VERSION` (`3`) ·
+`ARKDELTA_MAX_OPS` (`5000`) · `ARKDELTA_MAX_BYTES` (8 MiB).
+
+```js
+import { validateDeltaText, verifyDeltaSignature } from 'arkmap/delta';
+
+const res = validateDeltaText(text);            // English messages
+const resPl = validateDeltaText(text, { locale: 'pl' }); // Studio-pinned Polish
+if (res.ok) {
+  const sig = await verifyDeltaSignature(res.delta);
+  console.log(sig.state); // 'unsigned' | 'claimed' | 'ok' | 'bad'
+}
+```
+
+Validation is **fail-closed**: unknown top-level/op keys, bad checksums,
+out-of-sequence ops, unresolved `d:N` symbolic ids and prototype-polluting
+keys all refuse the load. Polish messages are byte-identical to ArkMap
+Studio's validator, so Studio can adopt this package with zero user-visible
+change (see [Internationalization](#internationalization)).
 
 #### Token-indexed room search
 

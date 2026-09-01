@@ -58,6 +58,13 @@ export { LOCALES, resolveLocale, translate, plural } from './locale.js';
 // universal map diff — ordered arkdelta-style op list between two maps
 export { diffMaps } from './diff.js';
 
+// .arkdelta edit-deltas: fail-closed reader (validation + integrity checksums),
+// base identity, Ed25519 signature verification (verify-only)
+export {
+  ARKDELTA_FORMAT, ARKDELTA_FORMAT_VERSION, ARKDELTA_MAX_OPS, ARKDELTA_MAX_BYTES,
+  validateDeltaText, verifyDeltaSignature, computeBaseInfo, deltaChecksums,
+} from './delta-validate.js';
+
 // token-indexed room search (scoring parity with ArkMap Studio planner search)
 export { buildSearchIndex, searchIndexed } from './search-index.js';
 

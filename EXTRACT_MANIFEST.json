@@ -36,8 +36,8 @@
         4799,
         5552
       ],
-      "sha256": "affefc10ada2215a7269c5b604e5593a210b85065e401e9c35128202d8816f64",
-      "note": "EN internal invariant message in _CanonBuf (H0.3)"
+      "sha256": "2ac38d43dd1f901fb0b1089bff7186121ba873ee6faaa19cafd901430644a2c5",
+      "note": "EN internal invariant message in _CanonBuf (H0.3); _computeV4Checksums exported for delta base identity (H1)"
     },
     "src/mudlet-dat.js": {
       "status": "maintained",
@@ -98,6 +98,15 @@
         19357,
         19413
       ]
+    },
+    "src/delta-validate.js": {
+      "status": "maintained",
+      "lines": [
+        20895,
+        22369
+      ],
+      "sha256": "2773e395b2e9b76a7624ab26af51d8418978f31434601cb835c69629a7fc3c65",
+      "note": ".arkdelta reader (H1): validator + schema + sid machinery + checksums from the ARKDELTA block, signature verify from the identity block (20317-20337) with the Ed25519 fallback (20126-20218, verify-only subset). Divergences: i18n via locale.js (EN default, PL byte-pinned to Studio), parallel codes array, VALID_DIRS derived from constants.js"
     }
   }
 }

@@ -756,4 +756,4 @@ function verifyChecksums(arkmap) {
 }
 // ====CANONICAL-V4-END====
 
-export { xxh3_64, xxh3_64hex, addChecksums, verifyChecksums, _stripRoomDefaults };
+export { xxh3_64, xxh3_64hex, addChecksums, verifyChecksums, _stripRoomDefaults, _computeV4Checksums };

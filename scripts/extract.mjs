@@ -46,8 +46,8 @@ const BLOCKS = [
     imports: [{ from: './constants.js', names: ['DIR_BY_SHORT', 'FORMAT', 'FORMAT_VERSION', 'LINE_INT'] }],
     exports: ['validate'] },
   { out: 'checksum.js',        from: 4799,  to: 5552,  status: 'maintained',
-    note: 'EN internal invariant message in _CanonBuf (H0.3)',
-    exports: ['xxh3_64', 'xxh3_64hex', 'addChecksums', 'verifyChecksums', '_stripRoomDefaults'] },
+    note: 'EN internal invariant message in _CanonBuf (H0.3); _computeV4Checksums exported for delta base identity (H1)',
+    exports: ['xxh3_64', 'xxh3_64hex', 'addChecksums', 'verifyChecksums', '_stripRoomDefaults', '_computeV4Checksums'] },
   { out: 'mudlet-dat.js',      from: 5553,  to: 6540,  status: 'maintained',
     note: 'EN error strings + DAT_* machine codes on all throw paths, EN import warnings (H0.3)',
     exports: ['readMudletDat', 'writeMudletDat', 'MUDLET_DAT_MAX_SUPPORTED_VERSION', 'MUDLET_DAT_WRITE_VERSION', 'uint8ToBase64', 'base64ToUint8'] },
@@ -73,6 +73,8 @@ const BLOCKS = [
   { out: 'suppressors.js',     from: 19357, to: 19413, status: 'parity',
     imports: [{ from: './opposite.js', names: ['OPPOSITE'] }],
     exports: ['checkSuppressorsInMap', '_findMissingSuppressors'] },
+  { out: 'delta-validate.js',  from: 20895, to: 22369, status: 'maintained',
+    note: '.arkdelta reader (H1): validator + schema + sid machinery + checksums from the ARKDELTA block, signature verify from the identity block (20317-20337) with the Ed25519 fallback (20126-20218, verify-only subset). Divergences: i18n via locale.js (EN default, PL byte-pinned to Studio), parallel codes array, VALID_DIRS derived from constants.js' },
 ];
 
 // --- logic normalization ----------------------------------------------------

@@ -18,7 +18,8 @@
     "./search-index": "./src/search-index.js",
     "./render-svg": "./src/render-svg.js",
     "./render-png": "./src/render-png.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./delta": "./src/delta-validate.js"
   },
   "files": [
     "src/",

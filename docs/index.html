@@ -8,12 +8,13 @@
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: #14171c; color: #dde3ea; height: 100vh; display: flex; flex-direction: column; }
-  header { padding: 10px 16px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #2a3038; flex-wrap: wrap; }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header { padding: 10px 16px; display: flex; gap: 12px; align-items: flex-start; border-bottom: 1px solid #2a3038; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; padding-top: 5px; }
   header h1 span { color: #6f7684; font-weight: 400; }
   .btn { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
   .btn-fit { padding: 3px 6px; width: 48px; white-space: normal; line-height: 1.15; text-align: center; }
   .btn.mini { padding: 5px 9px; }
+  .btn.armed { box-shadow: 0 0 0 1px #4ade80; }
   .rf { position: relative; display: inline-flex; }
   .rf input { background: #1e232b; color: #dde3ea; border: 1px solid #2a3038; border-radius: 6px; padding: 6px 22px 6px 10px; font-size: 13px; width: 170px; }
   .rf input.armed { outline: none; }
@@ -21,16 +22,26 @@
   #routeEnd.armed { border-color: #f87171; box-shadow: 0 0 0 1px #f87171; }
   .clr { position: absolute; right: 1px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #8b93a1; cursor: pointer; font-size: 14px; padding: 2px 6px; }
   .clr:hover { color: #dde3ea; }
+  #routeBox { position: relative; display: flex; flex-direction: column; gap: 4px; }
+  #routeBox[hidden] { display: none; }
+  .rb-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .rb-center { justify-content: center; }
+  #chipsRow[hidden] { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: #1e232b; border: 1px solid #2a3038; border-radius: 10px; padding: 1px 4px 1px 8px; font-size: 12px; }
+  .chip .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .chip button { background: none; border: 0; color: #8b93a1; cursor: pointer; font-size: 13px; padding: 0 3px; }
+  .chip button:hover { color: #dde3ea; }
+  #routeCode { width: 300px; font-family: ui-monospace, monospace; }
   #routeResults { position: absolute; top: 110%; left: 0; min-width: 340px; max-height: 300px; overflow: auto; background: #1e232b; border: 1px solid #2a3038; border-radius: 6px; display: none; z-index: 10; }
   .btn:hover { background: #1d4fd7; }
   select { background: #1e232b; color: #dde3ea; border: 1px solid #2a3038; border-radius: 6px; padding: 6px 8px; font-size: 13px; max-width: 260px; }
-  #status { color: #8b93a1; font-size: 13px; }
+  #status { color: #8b93a1; font-size: 13px; padding-top: 6px; }
   #status.ok { color: #4ade80; }
   #status.warn { color: #fbbf24; }
   #status.err { color: #f87171; }
   #wrap { flex: 1; position: relative; overflow: hidden; }
-  canvas { position: absolute; inset: 0; cursor: grab; }
-  canvas:active { cursor: grabbing; }
+  canvas#cv { position: absolute; inset: 0; cursor: grab; }
+  canvas#cv:active { cursor: grabbing; }
   #drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20,23,28,.85); font-size: 18px; color: #93c5fd; border: 2px dashed #2563eb; }
   #drop.on { display: flex; }
   #empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: #5c6470; text-align: center; line-height: 1.6; pointer-events: none; }
@@ -44,6 +55,21 @@
   #progress .bar { height: 100%; width: 0%; background: #2563eb; border-radius: 3px; transition: width .12s linear; }
   #progress .bar.indet { width: 30%; animation: slide 1.1s ease-in-out infinite alternate; }
   @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
+  /* room info panel (top-right) — unarmed click / search jump opens it */
+  #roomPanel { position: absolute; top: 10px; right: 10px; width: 240px; background: #1b1f26; border: 1px solid #2a3038; border-radius: 8px; padding: 10px 12px; z-index: 6; font-size: 13px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+  #roomPanel[hidden] { display: none; }
+  #roomPanelX { position: absolute; top: 4px; right: 8px; background: none; border: 0; color: #8b93a1; cursor: pointer; font-size: 15px; padding: 2px 4px; }
+  #roomPanelX:hover { color: #dde3ea; }
+  .rp-row { color: #8b93a1; margin: 2px 0; word-wrap: break-word; }
+  .rp-row b { color: #dde3ea; font-weight: 600; }
+  /* geographic minimap (bottom-right) — real room coords of the current scope */
+  #minimap { position: absolute; right: 10px; bottom: 10px; width: 180px; height: 120px; background: #0d0f12; border: 1px solid #2a3038; border-radius: 6px; z-index: 5; cursor: crosshair; }
+  #minimap[hidden] { display: none; }
+  /* schematic route overview (bottom-left) — step-delta polyline, not real coords */
+  #routeOv { position: absolute; left: 10px; bottom: 10px; width: 200px; height: 140px; background: #0d0f12; border: 1px solid #2a3038; border-radius: 6px; z-index: 5; }
+  #routeOv[hidden] { display: none; }
+  #routeOvLabel { position: absolute; top: 4px; left: 8px; font-size: 10px; color: #8b93a1; pointer-events: none; letter-spacing: .4px; }
+  #routeOvCv { width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
@@ -52,24 +78,33 @@
   <button class="btn" id="open">Open .dat / .arkmap…</button>
   <button class="btn btn-fit" id="btnFit" hidden>Fit to window</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
-  <span id="routeBox" hidden style="position:relative;display:flex;gap:6px;align-items:center">
-    <span class="rf"><input id="routeStart" placeholder="Start: name or #id…" autocomplete="off"><button class="clr" id="clrStart" title="clear start">×</button></span>
-    <button class="btn mini" id="routeSwap" title="swap start and end">⇄</button>
-    <span class="rf"><input id="routeEnd" placeholder="End: name or #id…" autocomplete="off"><button class="clr" id="clrEnd" title="clear end">×</button></span>
-    <button class="btn mini" id="routeClear" title="clear route and room highlight">Clear</button>
-    <select id="optAlgo" title="routing algorithm" style="max-width:none">
-      <option value="dijkstra">Dijkstra</option><option value="astar">A*</option>
-    </select>
-    <select id="optDir" title="direction filter" style="max-width:none">
-      <option value="all">all dirs</option><option value="cardinal">cardinal</option><option value="vertical">+vertical</option>
-    </select>
-    <select id="optTrans" title="transport lines" style="max-width:none">
-      <option value="off">no transports</option><option value="normal">transports</option><option value="aggressive">transports (aggr.)</option>
-    </select>
+  <span id="routeBox" hidden>
+    <div class="rb-row">
+      <span class="rf"><input id="routeStart" placeholder="Start: name or #id…" autocomplete="off"><button class="clr" id="clrStart" title="clear start">×</button></span>
+      <button class="btn mini" id="routeSwap" title="reverse the whole route">⇄</button>
+      <span class="rf"><input id="routeEnd" placeholder="End: name or #id…" autocomplete="off"><button class="clr" id="clrEnd" title="clear end">×</button></span>
+      <button class="btn mini" id="routeVia" title="add a waypoint before the end — then click a room">+Via</button>
+      <select id="optAlgo" title="routing algorithm" style="max-width:none">
+        <option value="dijkstra">Dijkstra</option><option value="astar">A*</option>
+      </select>
+      <select id="optDir" title="direction filter" style="max-width:none">
+        <option value="all">all dirs</option><option value="cardinal">cardinal</option><option value="vertical">+vertical</option>
+      </select>
+      <select id="optTrans" title="transport lines" style="max-width:none">
+        <option value="off">no transports</option><option value="normal">transports</option><option value="aggressive">transports (aggressive)</option>
+      </select>
+    </div>
+    <div class="rb-row" id="chipsRow" hidden></div>
+    <div class="rb-row rb-center">
+      <span class="rf"><input id="routeCode" placeholder="route code: arkmap:…" autocomplete="off" title="live route code — paste a code and press Enter to import"></span>
+      <button class="btn mini" id="routeCopy" title="copy route code to clipboard">Copy</button>
+      <button class="btn mini" id="routeClear" title="clear route, waypoints, code and room highlight">Clear route</button>
+      <button class="btn mini" id="routeFit" title="fit the route fragment of the current area in the window">Fit route</button>
+    </div>
     <div id="routeResults"></div>
   </span>
   <span id="searchBox" hidden style="position:relative">
-    <input id="search" placeholder="Search room (name or #id)…" autocomplete="off" style="background:#1e232b;color:#dde3ea;border:1px solid #2a3038;border-radius:6px;padding:6px 10px;font-size:13px;width:240px">
+    <span class="rf"><input id="search" placeholder="Search room (name or #id)…" autocomplete="off" style="width:240px"><button class="clr" id="clrSearch" title="clear search and highlight">×</button></span>
     <div id="searchResults" style="position:absolute;top:110%;left:0;min-width:340px;max-height:300px;overflow:auto;background:#1e232b;border:1px solid #2a3038;border-radius:6px;display:none;z-index:10"></div>
   </span>
   <select id="selArea" hidden></select>
@@ -81,6 +116,15 @@
   <div id="empty"><div>Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.</div><div>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div></div>
   <div id="progress"><div class="box"><div class="label">loading…</div><div class="track"><div class="bar"></div></div></div></div>
   <div id="drop">drop to load</div>
+  <div id="roomPanel" hidden>
+    <button id="roomPanelX" title="close">×</button>
+    <div id="roomPanelBody"></div>
+  </div>
+  <canvas id="minimap" width="180" height="120" hidden></canvas>
+  <div id="routeOv" hidden>
+    <div id="routeOvLabel">ROUTE</div>
+    <canvas id="routeOvCv" width="200" height="140"></canvas>
+  </div>
 </div>
 <script src="arkmap.bundle.js"></script>
 <script>
@@ -90,16 +134,34 @@ const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const statusEl = document.getElementById('status'), emptyEl = document.getElementById('empty');
 const selArea = document.getElementById('selArea'), selZ = document.getElementById('selZ');
 const progEl = document.getElementById('progress'), progBar = progEl.querySelector('.bar'), progLabel = progEl.querySelector('.label');
+const searchEl = document.getElementById('search'), searchRes = document.getElementById('searchResults');
+const startEl = document.getElementById('routeStart'), endEl = document.getElementById('routeEnd');
+const routeRes = document.getElementById('routeResults'), routeBox = document.getElementById('routeBox');
+const optAlgoEl = document.getElementById('optAlgo'), optDirEl = document.getElementById('optDir'),
+      optTransEl = document.getElementById('optTrans');
+const viaBtn = document.getElementById('routeVia'), chipsRow = document.getElementById('chipsRow');
+const codeEl = document.getElementById('routeCode');
+const roomPanel = document.getElementById('roomPanel'), roomPanelBody = document.getElementById('roomPanelBody');
+const mmEl = document.getElementById('minimap');
+const ovEl = document.getElementById('routeOv'), ovc = document.getElementById('routeOvCv');
+
 let map = null, view = { x: 0, y: 0, scale: 14 };
 let roomIdx = new Map();          // roomId -> { room, areaId, areaName } (A.buildIndex)
 let scope = { areaId: 'all', z: null };
-let routeStart = null;            // roomId — poczatek trasy (pole Start / uzbrojony klik)
-let routeEnd = null;              // roomId — koniec trasy (pole Koniec / uzbrojony klik)
-let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki
-let route = null;                 // [roomId, ...] — aktywna trasa
-let routeHops = null;             // [hop|null, ...] — metadane transportow per krok
-let armedField = null;            // 'start' | 'end' | null — pole czekajace na klik w pokoj
+let routeStart = null;            // roomId — pierwszy waypoint trasy (pole Start / uzbrojony klik)
+let routeEnd = null;              // roomId — ostatni waypoint trasy (pole Koniec / uzbrojony klik)
+let routeVias = [];               // [roomId, ...] — waypointy posrednie (miedzy Start a Koniec)
+let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki / inspekcji
+let routeLegs = [];               // [{from,to,path,hops}|null] — odcinki planu (A.planRoute)
+let planComplete = true, planTotal = 0;
+let armedField = null;            // 'start' | 'end' | 'via' | null — czeka na klik w pokoj
 let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
+let ovGeom = null;                // geometria schematycznego podgladu trasy (cache)
+let mmDirty = true, mmCache = null, mmXf = null, mmDrag = false;  // minimapa geograficzna
+
+// waypoint marker colors (cycle) — shared by map rings, chips and the route overview
+const WP_COLORS = ['#00c896', '#4a90e8', '#e84a90', '#e8c84a', '#a04ae8'];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Mudlet direction deltas (data coords; screen Y is negated at draw time)
 const DELTA = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
@@ -169,7 +231,7 @@ function innerTri(x, y, px, py, rot, R) {
 function draw() {
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
-  if (!map) return;
+  if (!map) { drawMinimap(); drawRouteOv(); return; }
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
   ctx.save();
   ctx.translate(W / 2 + view.x, H / 2 + view.y);
@@ -263,20 +325,27 @@ function draw() {
     }
   }
 
-  // route overlay (segmenty widoczne w biezacym zakresie)
-  if (route && route.length > 1) {
-    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 0.3; ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (let i = 0; i + 1 < route.length; i++) {
-      const a = roomIdx.get(route[i])?.room, b = roomIdx.get(route[i + 1])?.room;
-      if (!a || !b || !visIds.has(a.id) || !visIds.has(b.id)) continue;
-      ctx.moveTo(a.x, -a.y); ctx.lineTo(b.x, -b.y);
+  // route overlay: per leg (odcinki miedzy waypointami); hops (transport) przerywane
+  if (routeLegs.length) {
+    ctx.lineCap = 'round';
+    for (const leg of routeLegs) {
+      if (!leg || !leg.path || leg.path.length < 2) continue;
+      for (let i = 0; i + 1 < leg.path.length; i++) {
+        const a = roomIdx.get(leg.path[i])?.room, b = roomIdx.get(leg.path[i + 1])?.room;
+        if (!a || !b || !visIds.has(a.id) || !visIds.has(b.id)) continue;
+        const hop = leg.hops?.[i];
+        ctx.setLineDash(hop ? [0.7, 0.7] : []);
+        ctx.strokeStyle = hop ? '#fbbf24' : '#f87171';
+        ctx.lineWidth = 0.3;
+        ctx.beginPath(); ctx.moveTo(a.x, -a.y); ctx.lineTo(b.x, -b.y); ctx.stroke();
+      }
     }
-    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.lineCap = 'butt';
   }
 
-  // highlight: start trasy (niebieski), koniec trasy (czerwony), wynik wyszukiwania (bialo-pomaranczowy)
+  // highlight: start trasy (niebieski), koniec trasy (czerwony), waypointy posrednie
+  // (cykl kolorow jak na minimapce trasy), wynik wyszukiwania (bialo-pomaranczowy)
   const ring = (room, color) => {
     ctx.strokeStyle = color; ctx.lineWidth = 0.22;
     ctx.strokeRect(room.x - rs - 0.14, -room.y - rs - 0.14, (rs + 0.14) * 2, (rs + 0.14) * 2);
@@ -289,6 +358,10 @@ function draw() {
     const e = roomIdx.get(routeEnd);
     if (e && visible(e.room, e.areaId)) ring(e.room, '#f87171');
   }
+  for (let i = 0; i < routeVias.length; i++) {
+    const e = roomIdx.get(routeVias[i]);
+    if (e && visible(e.room, e.areaId)) ring(e.room, WP_COLORS[(i + 1) % WP_COLORS.length]);
+  }
   if (highlightRoom != null) {
     const e = roomIdx.get(highlightRoom);
     if (e && visible(e.room, e.areaId)) {
@@ -298,6 +371,9 @@ function draw() {
     }
   }
   ctx.restore();
+
+  drawMinimap();
+  drawRouteOv();
 }
 
 function fit() {
@@ -305,11 +381,51 @@ function fit() {
   const pts = roomsInScope();
   if (!pts.length) return;
   const xs = pts.map(r => r.x), ys = pts.map(r => -r.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  fitBBox(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
+}
+
+function fitBBox(minX, maxX, minY, maxY) {   // minY/maxY w przestrzeni ekranowej (-room.y)
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
   view.scale = Math.max(2, Math.min(40, Math.min(W / (maxX - minX + 4), H / (maxY - minY + 4))));
   view.x = -(minX + maxX) / 2 * view.scale;
   view.y = -(minY + maxY) / 2 * view.scale;
+}
+
+// fitRouteToView (jak w ArkMap Studio): dopasuj fragment trasy w BIEZACYM obszarze+Z;
+// jesli nic z trasy nie lezy w zakresie — skocz do obszaru pierwszego waypointa i tam fituj.
+function fitRoute() {
+  if (!map) return;
+  const wps = effectiveWps();
+  if (!wps.length) { setStatus('no route to fit', 'warn'); return; }
+  const collect = () => {
+    const ids = new Set();
+    for (const leg of routeLegs) {
+      if (!leg || !leg.path) continue;
+      for (const id of leg.path) ids.add(id);
+      for (const h of leg.hops || []) {
+        if (!h) continue;
+        const via = hopViaRooms(h);   // przystanki posrednie przesiadek lądowych tez w bbox
+        if (via) for (const id of via) ids.add(id);
+      }
+    }
+    if (!ids.size) for (const id of wps) ids.add(id);
+    return [...ids].map(id => roomIdx.get(id)).filter(e => e && visible(e.room, e.areaId)).map(e => e.room);
+  };
+  let pts = collect();
+  if (!pts.length) {
+    const e = roomIdx.get(wps[0]);
+    if (!e) return;
+    scope.areaId = e.areaId; scope.z = e.room.z ?? 0;
+    selArea.value = String(scope.areaId);
+    populateZ();
+    selZ.value = String(scope.z);
+    mmDirty = true;
+    pts = collect();
+    if (!pts.length) pts = [e.room];
+  }
+  const xs = pts.map(r => r.x), ys = pts.map(r => -r.y);
+  fitBBox(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
+  draw();
 }
 
 function populateSelectors() {
@@ -357,9 +473,9 @@ function populateZ() {
 
 selArea.onchange = () => {
   scope.areaId = selArea.value === 'all' ? 'all' : parseInt(selArea.value);
-  populateZ(); fit(); draw();
+  populateZ(); mmDirty = true; fit(); draw();
 };
-selZ.onchange = () => { scope.z = parseInt(selZ.value); fit(); draw(); };
+selZ.onchange = () => { scope.z = parseInt(selZ.value); mmDirty = true; fit(); draw(); };
 
 let drag = null;
 cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
@@ -370,7 +486,8 @@ cv.addEventListener('pointerup', e => {
   if (wasClick && map) pickRoom(e);
 });
 
-// klik w pokoj: uzbrojone pole Start/Koniec = ustaw endpoint; bez uzbrojenia = tylko inspekcja (status)
+// klik w pokoj: uzbrojone pole Start/Koniec = ustaw endpoint; +Via = wstaw waypoint;
+// bez uzbrojenia = inspekcja (panel informacji o pokoju + status)
 function pickRoom(e) {
   const rect = cv.getBoundingClientRect();
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
@@ -382,12 +499,16 @@ function pickRoom(e) {
     if (d < bestD) { best = room; bestD = d; }
   }
   if (!best) return;
-  if (armedField) {
+  if (armedField === 'via') {
+    addVia(best.id);
+    disarm();
+  } else if (armedField) {
     setEndpoint(armedField, best.id);
     disarm();
     startEl.blur(); endEl.blur();
   } else {
     const e2 = roomIdx.get(best.id);
+    openRoomPanel(best.id);
     setStatus(`${best.name || 'room'} (#${best.id}) — ${e2 ? e2.areaName : '?'}, z=${best.z ?? 0}`, '');
   }
   draw();
@@ -401,6 +522,20 @@ function setEndpoint(side, roomId) {
   recomputeRoute();
 }
 
+// +Via: pierwszy wolny slot — Start, potem Koniec, potem waypoint posredni przed Koncem
+function addVia(roomId) {
+  const e = roomIdx.get(roomId);
+  if (!e) return;
+  if (routeStart == null) { routeStart = roomId; startEl.value = e.room.name || String(roomId); }
+  else if (routeEnd == null) { routeEnd = roomId; endEl.value = e.room.name || String(roomId); }
+  else routeVias.push(roomId);
+  recomputeRoute();
+}
+
+function effectiveWps() {   // waypointy w kolejnosci: start, posrednie, koniec (bez pustych)
+  return [routeStart, ...routeVias, routeEnd].filter(x => x != null);
+}
+
 // transporty: osadzone w mapie (map.transports) maja pierszenstwo; dla mapy
 // Arkadii bez wlasnych linii dokladamy warstwe danych z pakietu
 function transportsFor() {
@@ -409,38 +544,83 @@ function transportsFor() {
   return A.isArkadiaMap(map) ? A.ARKADIA_TRANSPORTS : null;
 }
 
+// Przejazd lądowy (woz/dylizans/powoz) rozpisany na realne pokoje drogi —
+// minimapka trasy i fit pokazuja ksztalt trasy zamiast jednego skoku (jak _hopViaRooms w Studio).
+const _viaCache = new Map();
+function hopViaRooms(hop) {
+  const key = hop.name + '|' + hop.from + '>' + hop.to;
+  if (!_viaCache.has(key)) _viaCache.set(key, _computeHopVia(hop));
+  return _viaCache.get(key);
+}
+function _computeHopVia(hop) {
+  if (!/woz|dylizans|powoz/.test((hop.board || []).join(' '))) return null;
+  const doc = transportsFor();
+  const line = (doc?.lines || []).find(l => l.name === hop.name);
+  if (!line) return null;
+  const chain = [hop.from];
+  let cur = hop.from, guard = 0;
+  while (cur !== hop.to && guard++ <= line.legs.length) {
+    const leg = line.legs.find(l => l.from === cur);
+    if (!leg) return null;
+    cur = leg.to; chain.push(cur);
+  }
+  if (cur !== hop.to) return null;
+  // piesza trasa miedzy kolejnymi przystankami — fizyczna droga wagonu,
+  // niezalezna od filtrow planera (all dirs, bez transportow)
+  let full = [];
+  for (let k = 0; k + 1 < chain.length; k++) {
+    const seg = A.findRoute(chain[k], chain[k + 1], roomIdx, { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off' });
+    if (!seg.path) return null;
+    full = full.length ? full.concat(seg.path.slice(1)) : seg.path.slice();
+  }
+  return full;
+}
+
 function recomputeRoute() {
-  if (routeStart != null && routeEnd != null && routeStart !== routeEnd) {
-    const r = A.findRoute(routeStart, routeEnd, roomIdx, {
+  const wps = effectiveWps();
+  routeLegs = []; planComplete = true; planTotal = 0;
+  if (wps.length >= 2) {
+    const plan = A.planRoute(wps, roomIdx, {
       algorithm: optAlgoEl.value, dirMode: optDirEl.value,
       transportMode: optTransEl.value, transports: transportsFor() });
-    route = r.path; routeHops = r.hops;
-  } else {
-    route = null; routeHops = null;
+    routeLegs = plan.legs; planComplete = plan.complete; planTotal = plan.totalSteps;
   }
+  ovGeom = computeOvGeom();
+  updateChips();
+  updateRouteCode();
   routeStatus();
 }
 
 function routeStatus() {
-  if (routeStart == null || routeEnd == null) { setStatus(loadedMsg, loadedCls); return; }
-  if (routeStart === routeEnd) setStatus('start = end — already there', 'ok');
-  else if (route) {
-    const hops = (routeHops || []).filter(Boolean);
-    const hopTxt = hops.length ? `, incl. ${hops.length} transport hop(s): ${[...new Set(hops.map(h => h.name))].join(', ')}` : '';
-    setStatus(`route: ${route.length - 1} step(s)${hopTxt}`, 'ok');
+  const wps = effectiveWps();
+  if (wps.length < 2) { setStatus(loadedMsg, loadedCls); return; }
+  if (!planComplete) {
+    if (wps.length === 2) setStatus('no route between the selected rooms', 'warn');
+    else {
+      const fi = routeLegs.findIndex(l => !l || !l.path);
+      setStatus(`no route for leg ${fi + 1} → ${fi + 2} of the waypoints`, 'warn');
+    }
+    return;
   }
-  else setStatus('no route between the selected rooms', 'warn');
+  if (planTotal === 0) { setStatus('start = end — already there', 'ok'); return; }
+  const hops = [];
+  for (const l of routeLegs) if (l?.hops) for (const h of l.hops) if (h) hops.push(h.name);
+  const hopTxt = hops.length ? `, incl. ${hops.length} transport hop(s): ${[...new Set(hops)].join(', ')}` : '';
+  const viaTxt = wps.length > 2 ? ` via ${wps.length} waypoints` : '';
+  setStatus(`route: ${planTotal} step(s)${viaTxt}${hopTxt}`, 'ok');
 }
 
 function arm(side) {
   armedField = side;
   startEl.classList.toggle('armed', side === 'start');
   endEl.classList.toggle('armed', side === 'end');
+  viaBtn.classList.toggle('armed', side === 'via');
 }
 function disarm() {
   armedField = null;
   startEl.classList.remove('armed');
   endEl.classList.remove('armed');
+  viaBtn.classList.remove('armed');
 }
 
 function centerOn(room, minScale = 12) {
@@ -458,17 +638,40 @@ function jumpToRoom(roomId) {
   selArea.value = String(scope.areaId);
   populateZ();
   selZ.value = String(scope.z);
+  mmDirty = true;
   centerOn(e.room);
   draw();
+  openRoomPanel(roomId);
   setStatus(`${e.room.name || 'room'} (#${roomId}) — ${e.areaName}, z=${scope.z}`, 'ok');
 }
 
+// --- panel informacji o pokoju (prawy gorny rog) ---
+function openRoomPanel(roomId) {
+  const e = roomIdx.get(roomId);
+  if (!e) return;
+  highlightRoom = roomId;
+  const r = e.room;
+  const ex = Object.keys(r.exits || {});
+  const doors = Object.keys(r.doors || {});
+  const special = Object.keys(r.special_exits || {});
+  roomPanelBody.innerHTML =
+    `<div class="rp-row"><b>${esc(r.name || '(unnamed)')}</b> · #${r.id}</div>` +
+    `<div class="rp-row">${esc(e.areaName)} · z=${r.z ?? 0}</div>` +
+    `<div class="rp-row">x=${r.x}, y=${r.y}</div>` +
+    (ex.length ? `<div class="rp-row">exits: ${esc(ex.join(' '))}</div>` : '') +
+    (doors.length ? `<div class="rp-row">doors: ${esc(doors.join(' '))}</div>` : '') +
+    (special.length ? `<div class="rp-row">special exits: ${special.length}</div>` : '');
+  roomPanel.hidden = false;
+}
+function closeRoomPanel() { roomPanel.hidden = true; }
+document.getElementById('roomPanelX').onclick = () => {
+  closeRoomPanel();
+  highlightRoom = null;
+  routeStatus();
+  draw();
+};
+
 // --- wyszukiwarka pokoi ---
-const searchEl = document.getElementById('search'), searchRes = document.getElementById('searchResults');
-const startEl = document.getElementById('routeStart'), endEl = document.getElementById('routeEnd');
-const routeRes = document.getElementById('routeResults'), routeBox = document.getElementById('routeBox');
-const optAlgoEl = document.getElementById('optAlgo'), optDirEl = document.getElementById('optDir'),
-      optTransEl = document.getElementById('optTrans');
 searchEl.addEventListener('input', () => {
   const hits = A.searchRooms(searchEl.value, map);
   if (!hits.length) { searchRes.style.display = 'none'; return; }
@@ -491,6 +694,15 @@ searchEl.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') { searchRes.style.display = 'none'; searchEl.blur(); }
 });
+// x w polu szukajki: czysci pole, dropdown, podswietlenie pokoju i panel — trasy NIE rusza
+document.getElementById('clrSearch').onclick = () => {
+  searchEl.value = '';
+  searchRes.style.display = 'none';
+  highlightRoom = null;
+  closeRoomPanel();
+  routeStatus();
+  draw();
+};
 
 // --- pola trasy Start/Koniec: wpisz fraze albo uzbroj pole i kliknij pokoj ---
 function showRouteResults(field, side) {
@@ -528,21 +740,92 @@ document.getElementById('routeSwap').onclick = () => {
   const id = routeStart, v = startEl.value;
   routeStart = routeEnd; startEl.value = endEl.value;
   routeEnd = id; endEl.value = v;
+  routeVias.reverse();   // pelna odwrotka trasy, nie tylko konce
   recomputeRoute(); draw();
 };
-// Clear: kasuje trase (pola + znaczniki) ORAZ podswietlenie pokoju z wyszukiwarki
+// +Via: uzbraja tryb waypointa — kolejny klik w pokoj wstawia go przed Koniec
+viaBtn.onclick = () => {
+  if (armedField === 'via') { disarm(); routeStatus(); return; }
+  arm('via');
+  setStatus('waypoint mode — click a room to add it to the route (Esc cancels)', '');
+};
+
+// --- chips waypointow posrednich ---
+function updateChips() {
+  chipsRow.innerHTML = '';
+  chipsRow._chipBtns = [];   // expando: uchwyty testowe (smoke harness bez przegladarki)
+  chipsRow._chipEls = [];
+  chipsRow.hidden = routeVias.length === 0;
+  routeVias.forEach((id, i) => {
+    const e = roomIdx.get(id);
+    const wpIdx = i + 1;   // pozycja w effectiveWps (0 = Start)
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `<span class="dot" style="background:${WP_COLORS[wpIdx % WP_COLORS.length]}"></span><span>${wpIdx + 1}: ${esc(e?.room.name || '#' + id)}</span>`;
+    const x = document.createElement('button');
+    x.textContent = '×'; x.title = 'remove waypoint';
+    x.onclick = () => { routeVias.splice(i, 1); recomputeRoute(); draw(); };
+    chip.appendChild(x);
+    chipsRow.appendChild(chip);
+    chipsRow._chipBtns.push(x);
+    chipsRow._chipEls.push(chip);
+  });
+}
+
+// --- kod trasy: podglad na zywo + wklej+Enter = import ---
+function updateRouteCode() {
+  const wps = effectiveWps();
+  const code = wps.length >= 2
+    ? A.encodeRoute(wps, { algorithm: optAlgoEl.value, dirMode: optDirEl.value, transportMode: optTransEl.value })
+    : '';
+  if (document.activeElement !== codeEl) codeEl.value = code;
+}
+codeEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { codeEl.blur(); return; }
+  if (e.key !== 'Enter') return;
+  const code = codeEl.value.trim();
+  if (!code) return;
+  const res = A.decodeRoute(code, id => roomIdx.has(id));
+  if (!res) { setStatus('invalid route code — expected arkmap:<flags>:<ids>:<crc>', 'err'); return; }
+  if (res.error === 'crc') { setStatus(`route code corrupted — crc mismatch (expected ${res.expected}, got ${res.actual})`, 'err'); return; }
+  if (res.error === 'too-many') { setStatus(`route code has ${res.total} waypoints — max ${res.max}`, 'err'); return; }
+  if (res.valid.length < 2) { setStatus('route code: fewer than 2 waypoints exist in this map', 'err'); return; }
+  optAlgoEl.value = res.algorithm; optDirEl.value = res.dirMode; optTransEl.value = res.transportMode;
+  routeStart = res.valid[0];
+  routeEnd = res.valid[res.valid.length - 1];
+  routeVias = res.valid.slice(1, -1);
+  const nm = id => roomIdx.get(id)?.room.name || String(id);
+  startEl.value = nm(routeStart); endEl.value = nm(routeEnd);
+  disarm();
+  recomputeRoute();
+  if (res.invalidCount) setStatus(`route imported: ${res.valid.length} waypoints — ${res.invalidCount} not in this map (skipped)`, 'warn');
+  else setStatus(`route imported: ${res.valid.length} waypoints`, 'ok');
+  draw();
+});
+document.getElementById('routeCopy').onclick = () => {
+  const code = codeEl.value.trim();
+  if (!code) { setStatus('nothing to copy — set a route first', 'warn'); return; }
+  const cb = globalThis.navigator?.clipboard;
+  if (cb?.writeText) cb.writeText(code).then(() => setStatus('route code copied to clipboard', 'ok'), () => setStatus('copy failed', 'err'));
+  else setStatus('clipboard unavailable — select the code and copy it manually', 'warn');
+};
+// Clear route: kasuje trase (pola + waypointy + kod + podglad), podswietlenie pokoju
+// i panel — ale NIE pole wyszukiwarki
 document.getElementById('routeClear').onclick = () => {
-  routeStart = routeEnd = route = routeHops = highlightRoom = null;
-  startEl.value = endEl.value = '';
+  routeStart = routeEnd = highlightRoom = null;
+  routeVias = []; routeLegs = []; planComplete = true; planTotal = 0;
+  startEl.value = endEl.value = codeEl.value = '';
+  closeRoomPanel();
   disarm();
   recomputeRoute(); draw();
 };
+document.getElementById('routeFit').onclick = () => fitRoute();
 for (const el of [optAlgoEl, optDirEl, optTransEl]) el.onchange = () => { recomputeRoute(); draw(); };
-// Escape poza polami tekstowymi kasuje podswietlenie pokoju (pola maja wlasne Escape)
+// Escape poza polami tekstowymi: odzbraja tryb waypointa albo kasuje podswietlenie pokoju
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && highlightRoom != null && !/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) {
-    highlightRoom = null; draw(); setStatus(loadedMsg, loadedCls);
-  }
+  if (e.key !== 'Escape' || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (armedField === 'via') { disarm(); routeStatus(); return; }
+  if (highlightRoom != null) { highlightRoom = null; closeRoomPanel(); draw(); routeStatus(); }
 });
 
 document.addEventListener('click', (e) => {
@@ -563,14 +846,185 @@ document.getElementById('btnFit').onclick = () => { fit(); draw(); };
 })();
 cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
 
+// --- minimapa geograficzna (prawy dolny rog): realne wspolrzedne pokoi biezacego
+// zakresu (obszar+Z), cache offscreen uniewazniany przy zmianie zakresu/mapy ---
+function drawMinimap() {
+  if (!map) { mmEl.hidden = true; return; }
+  mmEl.hidden = false;
+  const W = 180, H = 120, dpr = devicePixelRatio || 1;
+  if (mmEl.width !== Math.round(W * dpr)) { mmEl.width = Math.round(W * dpr); mmEl.height = Math.round(H * dpr); mmDirty = true; }
+  const mctx = mmEl.getContext('2d');
+  mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (mmDirty) {
+    mmDirty = false;
+    if (!mmCache) mmCache = document.createElement('canvas');
+    mmCache.width = mmEl.width; mmCache.height = mmEl.height;
+    const cctx = mmCache.getContext('2d');
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cctx.fillStyle = '#0d0f12'; cctx.fillRect(0, 0, W, H);
+    const pts = roomsInScope();
+    if (pts.length) {
+      const xs = pts.map(r => r.x), ys = pts.map(r => -r.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+      const sc = Math.min((W - 8) / Math.max(maxX - minX, 1), (H - 8) / Math.max(maxY - minY, 1));
+      const ox = (W - (maxX - minX) * sc) / 2 - minX * sc;
+      const oy = (H - (maxY - minY) * sc) / 2 - minY * sc;
+      mmXf = { sc, ox, oy };
+      for (const r of pts) {
+        cctx.fillStyle = envColor(r.env, map.colors);
+        cctx.fillRect(ox + r.x * sc - 1, oy + (-r.y) * sc - 1, 2.5, 2.5);
+      }
+    } else mmXf = null;
+  }
+  mctx.clearRect(0, 0, W, H);
+  if (mmCache) mctx.drawImage(mmCache, 0, 0, W, H);
+  if (!mmXf) return;
+  const { sc, ox, oy } = mmXf;
+  // prostokat viewportu mapy glownej (w przestrzeni -room.y)
+  const cw = cv.width / dpr, ch = cv.height / dpr;
+  const wx0 = (-cw / 2 - view.x) / view.scale, wx1 = (cw / 2 - view.x) / view.scale;
+  const ny0 = (-ch / 2 - view.y) / view.scale, ny1 = (ch / 2 - view.y) / view.scale;
+  mctx.strokeStyle = 'rgba(255,255,255,0.75)'; mctx.lineWidth = 1;
+  mctx.strokeRect(ox + wx0 * sc, oy + ny0 * sc, (wx1 - wx0) * sc, (ny1 - ny0) * sc);
+  // znaczniki: start (niebieski), koniec (czerwony), inspekcja (pomaranczowy)
+  const dot = (id, col) => {
+    const e = roomIdx.get(id);
+    if (!e || !visible(e.room, e.areaId)) return;
+    mctx.fillStyle = col;
+    mctx.fillRect(ox + e.room.x * sc - 2, oy + (-e.room.y) * sc - 2, 4, 4);
+  };
+  if (routeStart != null) dot(routeStart, '#60a5fa');
+  if (routeEnd != null) dot(routeEnd, '#f87171');
+  if (highlightRoom != null) dot(highlightRoom, '#fb923c');
+}
+
+// pan mapy glownej przez klik/drag po minimapce (guard: pointerup/leave konczy drag)
+mmEl.addEventListener('pointerdown', e => {
+  if (!mmXf) return;
+  mmDrag = true;
+  mmEl.setPointerCapture?.(e.pointerId);
+  mmPan(e);
+});
+mmEl.addEventListener('pointermove', e => { if (mmDrag) mmPan(e); });
+mmEl.addEventListener('pointerup', () => { mmDrag = false; });
+mmEl.addEventListener('pointerleave', () => { mmDrag = false; });
+function mmPan(e) {
+  if (!mmXf) return;
+  const rect = mmEl.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const wx = (mx - mmXf.ox) / mmXf.sc, ny = (my - mmXf.oy) / mmXf.sc;   // ny = -room.y
+  view.x = -wx * view.scale;
+  view.y = -ny * view.scale;
+  draw();
+}
+
+// --- schematyczny podglad trasy (lewy dolny rog): polyline z delt krokow (clamp ±1),
+// NIE realne wspolrzedne (teleporty/hopy nie rozwalaja ksztaltu). Hopy przerywane,
+// przejazdy lądowe rozpisane na pokoje drogi, markery WP numerowane, zielony overlay
+// "jestes tu" = segmenty widoczne w viewportcie mapy glownej (jak #wp-overview w Studio).
+function computeOvGeom() {
+  const wps = effectiveWps();
+  if (wps.length < 2 || !routeLegs.length) return null;
+  const pts = [[0, 0]], segHop = [], ptRoom = [null], wpMarkers = [];
+  let cx = 0, cy = 0;
+  for (let li = 0; li < routeLegs.length; li++) {
+    wpMarkers.push({ ptIdx: pts.length - 1, wpIdx: li });
+    const leg = routeLegs[li];
+    if (!leg || !leg.path || leg.path.length < 2) continue;
+    for (let i = 0; i + 1 < leg.path.length; i++) {
+      const hop = leg.hops?.[i] || null;
+      const via = hop ? hopViaRooms(hop) : null;
+      const steps = via || [leg.path[i], leg.path[i + 1]];
+      for (let k = 0; k + 1 < steps.length; k++) {
+        const sa = roomIdx.get(steps[k])?.room, sb = roomIdx.get(steps[k + 1])?.room;
+        if (!sa || !sb) continue;
+        cx += Math.max(-1, Math.min(1, sb.x - sa.x));
+        cy -= Math.max(-1, Math.min(1, sb.y - sa.y));
+        pts.push([cx, cy]); segHop.push(!!hop); ptRoom.push(steps[k + 1]);
+      }
+    }
+  }
+  wpMarkers.push({ ptIdx: pts.length - 1, wpIdx: routeLegs.length });
+  return pts.length > 1 ? { pts, segHop, ptRoom, wpMarkers } : null;
+}
+
+function drawRouteOv() {
+  const show = !!map && effectiveWps().length >= 2 && !!ovGeom;
+  ovEl.hidden = !show;
+  if (!show) return;
+  const W = 200, H = 140, dpr = devicePixelRatio || 1;
+  if (ovc.width !== Math.round(W * dpr)) { ovc.width = Math.round(W * dpr); ovc.height = Math.round(H * dpr); }
+  const g = ovc.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
+  const { pts, segHop, ptRoom, wpMarkers } = ovGeom;
+  const PAD = 14;   // miejsce na markery WP
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [px, py] of pts) {
+    if (px < minX) minX = px; if (px > maxX) maxX = px;
+    if (py < minY) minY = py; if (py > maxY) maxY = py;
+  }
+  const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1);
+  const sc = Math.min((W - PAD * 2) / spanX, (H - PAD * 2) / spanY);
+  const ox = (W - spanX * sc) / 2 - minX * sc;
+  const oy = (H - spanY * sc) / 2 - minY * sc;
+  const toC = ([px, py]) => [ox + px * sc, oy + py * sc];
+  const ovSeg = hop => g.setLineDash(hop ? [2, 2.5] : []);
+  const strokePass = (width, style, filter) => {
+    g.lineWidth = width; g.strokeStyle = style;
+    for (let i = 1; i < pts.length; i++) {
+      if (filter && !filter(i)) continue;
+      ovSeg(segHop[i - 1]);
+      const [ax, ay] = toC(pts[i - 1]);
+      const [px, py] = toC(pts[i]);
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(px, py); g.stroke();
+    }
+    g.setLineDash([]);
+  };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  strokePass(3, 'rgba(232,160,32,0.12)');              // glow
+  strokePass(1.5, 'rgba(255,190,50,0.9)');             // linia glowna
+  // "jestes tu": segmenty, ktorych pokoj docelowy lezy na ekranie (biezacy obszar+Z)
+  const cw = cv.width / dpr, ch = cv.height / dpr;
+  const wx0 = (-cw / 2 - view.x) / view.scale, wx1 = (cw / 2 - view.x) / view.scale;
+  const ny0 = (-ch / 2 - view.y) / view.scale, ny1 = (ch / 2 - view.y) / view.scale;
+  const onScreen = i => {
+    const e = ptRoom[i] != null ? roomIdx.get(ptRoom[i]) : null;
+    if (!e || !visible(e.room, e.areaId)) return false;
+    const ny = -e.room.y;
+    return e.room.x >= wx0 && e.room.x <= wx1 && ny >= ny0 && ny <= ny1;
+  };
+  strokePass(3, 'rgba(0,200,150,0.28)', onScreen);
+  strokePass(1.5, 'rgba(0,230,170,0.95)', onScreen);
+  // markery WP — kolorowe kwadraty z numerami (cykl WP_COLORS)
+  const SZ = 5;
+  for (const { ptIdx, wpIdx } of wpMarkers) {
+    const [px, py] = toC(pts[ptIdx]);
+    const col = WP_COLORS[wpIdx % WP_COLORS.length];
+    g.fillStyle = 'rgba(0,0,0,0.7)';
+    g.fillRect(px - SZ - 1, py - SZ - 1, (SZ + 1) * 2, (SZ + 1) * 2);
+    g.fillStyle = col;
+    g.fillRect(px - SZ, py - SZ, SZ * 2, SZ * 2);
+    g.fillStyle = '#000';
+    g.font = `bold ${Math.round(SZ * 1.5)}px monospace`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(wpIdx + 1), px, py);
+  }
+}
+
 function afterLoad(msg, cls) {
   scope.z = null;   // nowa mapa -> populateSelectors wybierze domyslny (najludniejszy) poziom
   roomIdx = A.buildIndex(map);
-  routeStart = routeEnd = highlightRoom = route = routeHops = null;
-  startEl.value = endEl.value = '';
+  routeStart = routeEnd = highlightRoom = null;
+  routeVias = []; routeLegs = []; planComplete = true; planTotal = 0;
+  startEl.value = endEl.value = codeEl.value = '';
   optAlgoEl.value = 'dijkstra'; optDirEl.value = 'all'; optTransEl.value = 'off';
   disarm();
   routeRes.style.display = 'none';
+  closeRoomPanel();
+  ovGeom = null;
+  mmDirty = true;
+  _viaCache.clear();
   loadedMsg = msg; loadedCls = cls;
   emptyEl.style.display = 'none';
   setStatus(msg, cls);
@@ -578,6 +1032,7 @@ function afterLoad(msg, cls) {
   document.getElementById('btnFit').hidden = false;
   document.getElementById('searchBox').hidden = false;
   routeBox.hidden = false;
+  updateChips();
   fit(); draw();
 }
 
@@ -603,13 +1058,15 @@ function checksumStatus(fileName, rooms, cs) {
 }
 // ===CHECKSUM-STATUS-END===
 
-// Status integralnosci transportow (checksums.transports, klasa D2 — jak meta:
-// problem z transportami nigdy nie robi z 'ok' statusu 'err', tylko 'warn').
-// Zwraca { suffix, level } albo null (plik w ogole bez transportow).
+// ===TRANSPORT-STATUS-BEGIN===
+// Osobny status warstwy transportow (osadzone linie maja wlasne sumy v4, liczone
+// niezaleznie od sum pokoi). Transport to dodatek — problem obniza status do warn,
+// nigdy err (trasa pieszo zawsze istnieje jako fallback).
 function transportStatus(m) {
   const ts = A.verifyTransportChecksums(m);
   if (!ts.present && !ts.unsigned) return null;                        // no transports at all
   if (!ts.present) return { suffix: ` — transports: ${ts.lineCount} line(s), unsigned`, level: 'warn' };
+  if (ts.verifyError) return { suffix: ' — transport checksum verification failed', level: 'warn' };
   if (ts.ok) return { suffix: ` — transports OK [${Object.keys(m.checksums.transports.lines).length} line(s)]`, level: 'ok' };
   const probs = [];
   if (ts.badLines?.length) probs.push(`${ts.badLines.length} line(s) modified (first: "${ts.badLines[0]}")`);
@@ -617,6 +1074,7 @@ function transportStatus(m) {
   if (ts.extraLines?.length) probs.push(`${ts.extraLines.length} orphaned transport checksum(s) (lines removed)`);
   return { suffix: ` — TRANSPORT CHECKSUM MISMATCH: ${probs.join('; ')}`, level: 'warn' };
 }
+// ===TRANSPORT-STATUS-END===
 
 function loadArkmapText(fileName, text) {
   const { map: m, validation, checksums } = A.loadArkmap(text);

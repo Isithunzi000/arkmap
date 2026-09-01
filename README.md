@@ -292,13 +292,62 @@ Semantics worth knowing:
   with one `EDIT_ROOM` fallback, then the rest resolves as `MOVE_ROOM`.
 - **Deterministic** — same input pair, byte-identical output.
 
+#### Token-indexed room search
+
+`buildSearchIndex(map)` precomputes a **token index** (lowercase word → room
+ids, separately for room-name and area-name hits); `searchIndexed(index,
+query, limit = 25)` answers queries without rescanning the map. Scoring is
+parity with ArkMap Studio's planner search: each query word found in the room
+name = 2 points, in the area name = 1 point, a room whose id equals the
+numeric query = 999; results sort by score desc with stable map-order
+tie-breaks, cut at `limit`. Universal — any arkmap-shaped map, any MUD.
+Available from the root and under the `arkmap/search-index` subpath.
+
+```js
+import { buildSearchIndex, searchIndexed } from 'arkmap/search-index';
+
+const idx = buildSearchIndex(map);            // build once, query many times
+searchIndexed(idx, 'karczma smok');           // multi-word: intersect, cumulative score
+// -> [{ roomId, name, areaName, score }, ...]
+```
+
+#### Vector rendering (SVG / PNG)
+
+`renderSvg(map, opts)` renders a map to a **true-vector SVG string** — no
+raster inside. Scope filters (`areaId`, `z`), env colors (same resolution
+chain as the demo viewer), exits with undirected dedup and out-of-scope
+stubs, optional room-name labels, route overlays (walking segments solid,
+transport hops dashed) and waypoint markers. Fully deterministic: same input,
+byte-identical SVG. Available from the root and under the `arkmap/render-svg`
+subpath.
+
+`svgToPng(svg, { scale = 2 })` rasterizes such a self-contained SVG to a PNG
+`Blob` in the **browser** (Blob URL → `<img>` → canvas → `toBlob`; the canvas
+stays untainted because the SVG has no external references). Available from
+the root and under the `arkmap/render-png` subpath.
+
+```js
+import { renderSvg } from 'arkmap/render-svg';
+import { svgToPng } from 'arkmap/render-png';
+
+const svg = renderSvg(map, {
+  areaId: 'all', z: null,
+  routes: [{ path, hops }],                        // optional overlay
+  markers: [{ id: 2188, color: '#60a5fa', label: '1' }],
+});
+const pngBlob = await svgToPng(svg, { scale: 2 }); // browser only
+```
+
 ### Demo viewer
 
 A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and
 per-level navigation, validation and checksum status — including per-line
-transport integrity, fit-to-window button, room search with jump & highlight,
-and two-field Start/End route planning with algorithm / direction-filter /
-transport-mode selects on top of `arkmap/graph`) lives in `docs/` and on
+transport integrity, fit-to-window button, room search with jump & highlight
+and a room info panel, geographic minimap with click/drag pan, schematic
+route overview, multi-waypoint route planning with gen-3 `arkmap:` route
+codes (live export / paste import) on top of `arkmap/graph` +
+`arkmap/waypoints`, and vector SVG / PNG export of the current view via
+`arkmap/render-svg`) lives in `docs/` and on
 [GitHub Pages](https://isithunzi000.github.io/arkmap/).
 
 ## Testing & guarantees

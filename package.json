@@ -15,6 +15,9 @@
     "./transports": "./src/transports.js",
     "./waypoints": "./src/waypoints.js",
     "./diff": "./src/diff.js",
+    "./search-index": "./src/search-index.js",
+    "./render-svg": "./src/render-svg.js",
+    "./render-png": "./src/render-png.js",
     "./package.json": "./package.json"
   },
   "files": [

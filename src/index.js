@@ -55,5 +55,12 @@ export {
 // universal map diff — ordered arkdelta-style op list between two maps
 export { diffMaps } from './diff.js';
 
+// token-indexed room search (scoring parity with ArkMap Studio planner search)
+export { buildSearchIndex, searchIndexed } from './search-index.js';
+
+// true-vector SVG rendering of any map; browser-only SVG->PNG rasterization
+export { renderSvg } from './render-svg.js';
+export { svgToPng } from './render-png.js';
+
 /** Checksum algorithm version implemented by this package ('v4' = XXH3-64 canonical). */
 export const CHECKSUM_ALG = 'v4';

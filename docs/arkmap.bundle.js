@@ -5583,6 +5583,313 @@ function diffMaps(srcMap, dstMap) {
 }
 
 
+// ── src/search-index.js ──
+// search-index.js — token-indexed room search for any arkmap map.
+//
+// Hand-written module (not extracted from the standalone app).
+//
+// Scoring parity with ArkMap Studio's planner search (wpDoSearch):
+//   token = lowercase word (split on \s+) of a room name or an area name.
+//   The index maps token -> { n: [roomId...] (name hits), a: [roomId...]
+//   (area hits) }. Query words are matched as substrings of tokens —
+//   exactness note: a query word contains no whitespace, so
+//   name.includes(word) is equivalent to "some token of the name includes
+//   the word". Per query word: union of name+area hits; the candidate set is
+//   intersected across words. Score: each word found in the room name = 2
+//   points, in the area name = 1 point; a room whose id equals the numeric
+//   query scores 999. Results sort by score desc, ties keep map traversal
+//   order (stable sort over ord-ordered candidates), cut at `limit`.
+//
+// Keep this file bundler-friendly for scripts/build-demo.mjs:
+// plain function/const declarations, single-line imports, one-line export list.
+
+// buildSearchIndex(mapObj) -> {
+//   tok:  Map token -> { n: roomId[], a: roomId[] },
+//   ord:  Map roomId -> position in map traversal (stable tie-break),
+//   byId: Map roomId -> room,
+//   areaOf: Map roomId -> areaId,
+//   areaNames: Map areaId -> string,
+// }
+function buildSearchIndex(mapObj) {
+  const tok = new Map(), ord = new Map(), byId = new Map(), areaOf = new Map(), areaNames = new Map();
+  let i = 0;
+  for (const area of mapObj?.areas || []) {
+    areaNames.set(area.id, area.name || '');
+    for (const room of area.rooms || []) {
+      ord.set(room.id, i++);
+      byId.set(room.id, room);
+      areaOf.set(room.id, area.id);
+      const nameLow = (room.name || '').toLowerCase();
+      const areaLow = (area.name || '').toLowerCase();
+      for (const t of new Set(nameLow.split(/\s+/).filter(Boolean))) {
+        let e = tok.get(t); if (!e) { e = { n: [], a: [] }; tok.set(t, e); }
+        e.n.push(room.id);
+      }
+      for (const t of new Set(areaLow.split(/\s+/).filter(Boolean))) {
+        let e = tok.get(t); if (!e) { e = { n: [], a: [] }; tok.set(t, e); }
+        e.a.push(room.id);
+      }
+    }
+  }
+  return { tok, ord, byId, areaOf, areaNames };
+}
+
+// searchIndexed(index, query, limit = 25) ->
+//   [{ roomId, name, areaName, score }] — scoring rules in the header.
+function searchIndexed(index, query, limit = 25) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q || !index) return [];
+  const byNum = parseInt(q);
+  const words = q.split(/\s+/).filter(Boolean);
+
+  // candidates from the token index (per word: name OR area; intersect words)
+  let cand = null;
+  for (const w of words) {
+    const uni = new Set();
+    for (const [t, e] of index.tok) {
+      if (!t.includes(w)) continue;
+      for (const id of e.n) uni.add(id);
+      for (const id of e.a) uni.add(id);
+    }
+    cand = cand === null ? uni : new Set([...cand].filter(id => uni.has(id)));
+    if (cand.size === 0) break;
+  }
+  const idRoom = (!isNaN(byNum) && index.byId.has(byNum)) ? byNum : null;
+  if (idRoom !== null) { if (!cand) cand = new Set(); cand.add(idRoom); }
+  if (!cand) return [];
+
+  const hits = [];
+  const ids = [...cand].sort((x, y) => index.ord.get(x) - index.ord.get(y));
+  for (const id of ids) {
+    const r = index.byId.get(id);
+    if (!r) continue;
+    const nameLow = (r.name || '').toLowerCase();
+    const areaName = index.areaNames.get(index.areaOf.get(id)) || '';
+    const areaLow = areaName.toLowerCase();
+    const idMatch = !isNaN(byNum) && r.id === byNum;
+    if (words.length === 0 && !idMatch) continue;
+    let score = 0, allMatch = true;
+    for (const w of words) {
+      const inName = nameLow.includes(w);
+      const inArea = areaLow.includes(w);
+      if (!inName && !inArea) { allMatch = false; break; }
+      score += inName ? 2 : 1;
+    }
+    if (allMatch || idMatch) {
+      hits.push({ roomId: r.id, name: r.name || `#${r.id}`, areaName, score: idMatch ? 999 : score });
+    }
+  }
+  hits.sort((a, b) => b.score - a.score);
+  return hits.slice(0, limit);
+}
+
+
+// ── src/render-svg.js ──
+// render-svg.js — true-vector SVG rendering of an arkmap map (no raster).
+//
+// Hand-written module (not extracted from the standalone app).
+//
+// renderSvg(mapObj, opts) -> SVG string. Deterministic by construction:
+// rooms iterate in stored area/room order, numbers are rounded to 2 decimal
+// places, no dates, no randomness. Geometry model mirrors the demo viewer:
+// room = square of half-size 0.36 map units, exits = straight lines (short
+// stubs for edges leaving the scope), screen Y is negated data Y. Edges
+// between two in-scope rooms are emitted once (undirected dedup).
+//
+// opts:
+//   areaId   'all' (default) | area id — scope filter
+//   z        null (default = all levels) | level — scope filter
+//   scale    px per map unit for the width/height attributes (default 20)
+//   background  CSS color (default '#14171c')
+//   labels   true => room names under rooms (default false)
+//   routes   [{ path: roomId[], hops?: (hop|null)[] }] — overlay polylines;
+//            hop segments (transports) dashed amber, walking solid red
+//   markers  [{ id, color?, label? }] — rings (+ optional text) on rooms
+//
+// Colors follow the demo viewer: map.colors custom_env_colors / env_colors
+// (ANSI palette), then ARKADIA_ENVS for Arkadia maps, then ansiPaletteRgb.
+//
+// Keep this file bundler-friendly for scripts/build-demo.mjs:
+// plain function/const declarations, single-line imports, one-line export list.
+
+
+const RENDER_ROOM_R = 0.36;   // room half-size in map units (Mudlet style)
+const RENDER_PAD = 1;         // viewBox margin in map units
+
+const _RENDER_DELTA = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
+
+function _renderEsc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function _renderFmt(n) {
+  const r = Math.round(n * 100) / 100;
+  return String(Object.is(r, -0) ? 0 : r);
+}
+
+function _renderEnvColor(env, mapObj) {
+  if (env == null) return '#3a4150';
+  const colors = mapObj?.colors;
+  const custom = colors?.custom_env_colors?.[env];
+  if (Array.isArray(custom)) return `rgb(${custom[0]},${custom[1]},${custom[2]})`;
+  const ansiIdx = colors?.env_colors?.[env];
+  if (ansiIdx != null && ANSI_PAL[ansiIdx]) { const c = ANSI_PAL[ansiIdx]; return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  if (mapObj && isArkadiaMap(mapObj, null) && ARKADIA_ENVS[env]) { const c = ARKADIA_ENVS[env].rgb; return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  const c = ansiPaletteRgb(env);
+  return c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#3a4150';
+}
+
+function renderSvg(mapObj, opts) {
+  const o = opts || {};
+  const areaId = o.areaId === undefined ? 'all' : o.areaId;
+  const z = o.z === undefined ? null : o.z;
+  const scale = o.scale || 20;
+  const bg = o.background || '#14171c';
+
+  const rooms = [];
+  const pos = new Map();   // roomId -> [sx, sy] (screen coords: y negated)
+  for (const area of mapObj?.areas || []) {
+    if (areaId !== 'all' && area.id !== areaId) continue;
+    for (const room of area.rooms || []) {
+      if (z !== null && (room.z ?? 0) !== z) continue;
+      rooms.push(room);
+      pos.set(room.id, [room.x, -room.y]);
+    }
+  }
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const r of rooms) {
+    const [sx, sy] = pos.get(r.id);
+    minX = Math.min(minX, sx - RENDER_ROOM_R); maxX = Math.max(maxX, sx + RENDER_ROOM_R);
+    minY = Math.min(minY, sy - RENDER_ROOM_R); maxY = Math.max(maxY, sy + RENDER_ROOM_R);
+  }
+  if (!rooms.length) { minX = -RENDER_PAD; maxX = RENDER_PAD; minY = -RENDER_PAD; maxY = RENDER_PAD; }
+  minX -= RENDER_PAD; maxX += RENDER_PAD; minY -= RENDER_PAD; maxY += RENDER_PAD;
+  const w = maxX - minX, h = maxY - minY;
+
+  const out = [];
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${_renderFmt(minX)} ${_renderFmt(minY)} ${_renderFmt(w)} ${_renderFmt(h)}" width="${_renderFmt(w * scale)}" height="${_renderFmt(h * scale)}">`);
+  out.push(`<rect x="${_renderFmt(minX)}" y="${_renderFmt(minY)}" width="${_renderFmt(w)}" height="${_renderFmt(h)}" fill="${bg}"/>`);
+
+  // exits: full lines inside the scope (dedup undirected), stubs for edges leaving it
+  const seen = new Set();
+  const lines = [];
+  for (const r of rooms) {
+    const [sx, sy] = pos.get(r.id);
+    for (const [dir, tgt] of Object.entries(r.exits || {})) {
+      const t = pos.get(tgt);
+      if (t) {
+        const key = r.id < tgt ? r.id + '>' + tgt : tgt + '>' + r.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lines.push(`<line x1="${_renderFmt(sx)}" y1="${_renderFmt(sy)}" x2="${_renderFmt(t[0])}" y2="${_renderFmt(t[1])}"/>`);
+      } else {
+        const d = _RENDER_DELTA[dir];
+        if (d) lines.push(`<line x1="${_renderFmt(sx)}" y1="${_renderFmt(sy)}" x2="${_renderFmt(sx + d[0] * 0.45)}" y2="${_renderFmt(sy - d[1] * 0.45)}"/>`);
+      }
+    }
+  }
+  if (lines.length) out.push(`<g stroke="#565e6b" stroke-width="0.14">${lines.join('')}</g>`);
+
+  // rooms as squares
+  const rects = [];
+  for (const r of rooms) {
+    const [sx, sy] = pos.get(r.id);
+    rects.push(`<rect x="${_renderFmt(sx - RENDER_ROOM_R)}" y="${_renderFmt(sy - RENDER_ROOM_R)}" width="${_renderFmt(RENDER_ROOM_R * 2)}" height="${_renderFmt(RENDER_ROOM_R * 2)}" fill="${_renderEnvColor(r.env, mapObj)}" stroke="rgba(0,0,0,0.35)" stroke-width="0.05"/>`);
+  }
+  if (rects.length) out.push(`<g>${rects.join('')}</g>`);
+
+  // optional room-name labels
+  if (o.labels) {
+    const texts = [];
+    for (const r of rooms) {
+      if (!r.name) continue;
+      const [sx, sy] = pos.get(r.id);
+      texts.push(`<text x="${_renderFmt(sx)}" y="${_renderFmt(sy + RENDER_ROOM_R + 0.55)}" font-size="0.5" fill="#dde3ea" text-anchor="middle" font-family="system-ui,sans-serif">${_renderEsc(r.name)}</text>`);
+    }
+    if (texts.length) out.push(`<g>${texts.join('')}</g>`);
+  }
+
+  // route overlays: walking solid red, transport hops dashed amber
+  for (const route of o.routes || []) {
+    const path = route?.path;
+    if (!Array.isArray(path) || path.length < 2) continue;
+    const segs = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+      const a = pos.get(path[i]), b = pos.get(path[i + 1]);
+      if (!a || !b) continue;
+      const hop = route.hops?.[i];
+      const dash = hop ? ` stroke-dasharray="0.7 0.7" stroke="#fbbf24"` : ` stroke="#f87171"`;
+      segs.push(`<line x1="${_renderFmt(a[0])}" y1="${_renderFmt(a[1])}" x2="${_renderFmt(b[0])}" y2="${_renderFmt(b[1])}"${dash}/>`);
+    }
+    if (segs.length) out.push(`<g stroke-width="0.3" stroke-linecap="round">${segs.join('')}</g>`);
+  }
+
+  // markers: rings (+ optional labels) on rooms
+  const rings = [];
+  for (const m of o.markers || []) {
+    const p = pos.get(m?.id);
+    if (!p) continue;
+    const col = m.color || '#fb923c';
+    const rr = RENDER_ROOM_R + 0.14;
+    let s = `<rect x="${_renderFmt(p[0] - rr)}" y="${_renderFmt(p[1] - rr)}" width="${_renderFmt(rr * 2)}" height="${_renderFmt(rr * 2)}" fill="none" stroke="${_renderEsc(col)}" stroke-width="0.22"/>`;
+    if (m.label !== undefined && m.label !== null) {
+      s += `<text x="${_renderFmt(p[0])}" y="${_renderFmt(p[1] - rr - 0.15)}" font-size="0.55" fill="${_renderEsc(col)}" text-anchor="middle" font-family="monospace">${_renderEsc(m.label)}</text>`;
+    }
+    rings.push(s);
+  }
+  if (rings.length) out.push(`<g>${rings.join('')}</g>`);
+
+  out.push('</svg>');
+  return out.join('\n');
+}
+
+
+// ── src/render-png.js ──
+// render-png.js — rasterize an SVG string to PNG in the browser.
+//
+// Hand-written module (not extracted from the standalone app).
+//
+// svgToPng(svg, opts) -> Promise<Blob> ('image/png'). Browser-only: builds an
+// <img> from a Blob URL, draws it on a canvas and re-encodes. The SVG must be
+// self-contained (no external references, no foreignObject) — then the canvas
+// stays untainted and toBlob works. renderSvg() output qualifies.
+//
+// opts: { scale = 2 } — output resolution multiplier over the SVG's
+// width/height attributes.
+//
+// Keep this file bundler-friendly for scripts/build-demo.mjs:
+// plain function/const declarations, single-line imports, one-line export list.
+
+async function svgToPng(svg, opts) {
+  const o = opts || {};
+  const scale = o.scale || 2;
+  if (typeof document === 'undefined' || typeof Image === 'undefined'
+      || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function'
+      || typeof Blob === 'undefined') {
+    throw new Error('svgToPng needs a browser (document/Image/URL.createObjectURL)');
+  }
+  const m = /<svg[^>]*\bwidth="([\d.]+)"[^>]*\bheight="([\d.]+)"/.exec(svg);
+  const w = m ? +m[1] : 800, h = m ? +m[2] : 600;
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error('SVG rasterization failed'));
+      im.src = url;
+    });
+    const cnv = document.createElement('canvas');
+    cnv.width = Math.round(w * scale);
+    cnv.height = Math.round(h * scale);
+    const g = cnv.getContext('2d');
+    g.drawImage(img, 0, 0, cnv.width, cnv.height);
+    return await new Promise((res, rej) => cnv.toBlob(b => b ? res(b) : rej(new Error('PNG encode failed')), 'image/png'));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+
 
 globalThis.arkmap = {
   loadArkmap, saveArkmap, createEmptyMap,
@@ -5597,6 +5904,8 @@ globalThis.arkmap = {
   TRANSPORTS_FORMAT, TRANSPORTS_VERSION, ARKADIA_TRANSPORTS,
   encodeRoute, decodeRoute, ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX,
   diffMaps,
+  buildSearchIndex, searchIndexed,
+  renderSvg, svgToPng,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

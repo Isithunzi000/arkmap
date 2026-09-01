@@ -19,7 +19,7 @@ const ORDER = [
   'mudlet-dat.js', 'validate.js', 'checksum.js', 'stable-stringify.js',
   'canonicalize.js', 'dat-to-arkmap.js', 'arkmap-to-dat.js',
   'suppressors.js', 'transports.js', 'arkmap.js', 'graph.js', 'waypoints.js',
-  'diff.js',
+  'diff.js', 'search-index.js', 'render-svg.js', 'render-png.js',
 ];
 
 const FOOTER = `
@@ -36,6 +36,8 @@ globalThis.arkmap = {
   TRANSPORTS_FORMAT, TRANSPORTS_VERSION, ARKADIA_TRANSPORTS,
   encodeRoute, decodeRoute, ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX,
   diffMaps,
+  buildSearchIndex, searchIndexed,
+  renderSvg, svgToPng,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

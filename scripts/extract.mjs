@@ -121,10 +121,10 @@ async function main() {
     }
     // unexpected extra files in src/ (hand-written modules are allowed:
     // arkmap.js, index.js, graph.js, transports.js, arkadia-transports.js,
-    // waypoints.js, diff.js)
+    // waypoints.js, diff.js, search-index.js, render-svg.js, render-png.js)
     const allowed = new Set([...outputs.keys()].map(p => p.replace(/^src\//, ''))
       .concat(['arkmap.js', 'index.js', 'graph.js', 'transports.js', 'arkadia-transports.js',
-               'waypoints.js', 'diff.js']));
+               'waypoints.js', 'diff.js', 'search-index.js', 'render-svg.js', 'render-png.js']));
     for (const f of readdirSync(join(ROOT, 'src'))) {
       if (!allowed.has(f)) { console.error(`UNEXPECTED: src/${f}`); bad++; }
     }

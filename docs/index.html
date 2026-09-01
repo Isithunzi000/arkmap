@@ -77,6 +77,8 @@
   <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
   <button class="btn btn-fit" id="btnFit" hidden>Fit to window</button>
+  <button class="btn mini" id="expSvg" hidden title="export current area/level as a vector SVG (with route overlay)">SVG</button>
+  <button class="btn mini" id="expPng" hidden title="export current area/level as PNG, 2x (with route overlay)">PNG</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
   <span id="routeBox" hidden>
     <div class="rb-row">
@@ -821,6 +823,37 @@ document.getElementById('routeClear').onclick = () => {
   recomputeRoute(); draw();
 };
 document.getElementById('routeFit').onclick = () => fitRoute();
+
+// --- eksport SVG (prawdziwy wektor) / PNG (raster 2x) biezacego zakresu z trasa ---
+function currentExportSvg() {
+  const routes = routeLegs.filter(l => l && l.path && l.path.length > 1).map(l => ({ path: l.path, hops: l.hops }));
+  const wps = effectiveWps();
+  const markers = wps.map((id, i) => ({ id, color: i === 0 ? '#60a5fa' : (i === wps.length - 1 ? '#f87171' : WP_COLORS[i % WP_COLORS.length]), label: String(i + 1) }));
+  if (highlightRoom != null) markers.push({ id: highlightRoom, color: '#fb923c' });
+  return A.renderSvg(map, { areaId: scope.areaId, z: scope.z, routes, markers });
+}
+function downloadBlob(name, blob) {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') { setStatus('download unavailable in this environment', 'warn'); return false; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  if (typeof a.click === 'function') a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return true;
+}
+document.getElementById('expSvg').onclick = () => {
+  if (!map) return;
+  const svg = currentExportSvg();
+  globalThis.__arkmapLastSvg = svg;   // hak smoke-harnessa (w przegladarce bez znaczenia)
+  if (downloadBlob('map.svg', new Blob([svg], { type: 'image/svg+xml' }))) setStatus('SVG exported — current area/level with route overlay', 'ok');
+};
+document.getElementById('expPng').onclick = async () => {
+  if (!map) return;
+  try {
+    const blob = await A.svgToPng(currentExportSvg(), { scale: 2 });
+    if (downloadBlob('map.png', blob)) setStatus('PNG exported — 2x, current area/level with route overlay', 'ok');
+  } catch (e) { setStatus('PNG export failed: ' + e.message, 'err'); }
+};
 for (const el of [optAlgoEl, optDirEl, optTransEl]) el.onchange = () => { recomputeRoute(); draw(); };
 // Escape poza polami tekstowymi: odzbraja tryb waypointa albo kasuje podswietlenie pokoju
 document.addEventListener('keydown', (e) => {
@@ -1031,6 +1064,8 @@ function afterLoad(msg, cls) {
   setStatus(msg, cls);
   populateSelectors();
   document.getElementById('btnFit').hidden = false;
+  document.getElementById('expSvg').hidden = false;
+  document.getElementById('expPng').hidden = false;
   document.getElementById('searchBox').hidden = false;
   routeBox.hidden = false;
   updateChips();

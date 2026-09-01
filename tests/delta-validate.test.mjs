@@ -11,6 +11,9 @@ import {
   validateDeltaText, verifyDeltaSignature, computeBaseInfo, deltaChecksums,
 } from '../src/delta-validate.js';
 import { stableStringify } from '../src/stable-stringify.js';
+import { webcrypto } from 'node:crypto';
+
+const subtle = webcrypto.subtle; // Node 18 has no globalThis.crypto
 import { addChecksums } from '../src/checksum.js';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'demo.arkdelta');
@@ -172,11 +175,11 @@ test('signature: unsigned / claimed / bad / ok + idOk (WebCrypto E2E)', async ()
   const claimed = JSON.parse(makeDelta([opSeq1], { author: 'Gandalf' }));
   assert.equal((await verifyDeltaSignature(claimed)).state, 'claimed');
   // ok: sign the payload with a real key
-  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
-  const pubHex = [...new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const kp = await subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const pubHex = [...new Uint8Array(await subtle.exportKey('raw', kp.publicKey))].map(b => b.toString(16).padStart(2, '0')).join('');
   const signed = JSON.parse(makeDelta([opSeq1], { author: 'Gandalf', author_pubkey: pubHex }));
   const payload = 'arkdelta-v3:' + stableStringify(signed);
-  const sig = await crypto.subtle.sign('Ed25519', kp.privateKey, new TextEncoder().encode(payload));
+  const sig = await subtle.sign('Ed25519', kp.privateKey, new TextEncoder().encode(payload));
   signed.checksums.sig = [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
   const okRes = await verifyDeltaSignature(signed);
   assert.equal(okRes.state, 'ok');

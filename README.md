@@ -57,7 +57,7 @@ Full format documentation (maintained alongside ArkMap Studio):
 ### Repository layout
 
 ```
-src/            library modules (constants, codecs, validation, checksums, converters)
+src/            library modules (constants, codecs, validation, checksums, converters, graph)
 scripts/        extract.mjs (module pipeline), run-tests.mjs, build-demo.mjs
 tests/          node:test suites + golden fixtures and oracle vectors
 docs/           demo viewer (GitHub Pages) + prebuilt browser bundle
@@ -123,10 +123,33 @@ subpath — kept out of the universal root API:
 import { ARKADIA_ENVS, ARKADIA_SYMBOLS, envPaletteList, isArkadiaMap } from 'arkmap/arkadia';
 ```
 
+#### Graph
+
+Room graph over a map: indexing, adjacency, Dijkstra pathfinding and room
+search. Available from the root and under the `arkmap/graph` subpath. Pure and
+stateless — same input, same output.
+
+| function | description |
+|---|---|
+| `buildIndex(map)` | room lookup: `Map(roomId → { room, areaId, areaName })` (duplicate ids: last wins) |
+| `neighborsOf(room)` | adjacency `[[targetId, weight], …]` — `exits` + `special_exits`; weight from `exit_weights`, invalid → 1, 0 is legal |
+| `findPath(fromId, toId, idx)` | shortest path as `[roomId, …]`; `[fromId]` when start = end; `null` for unknown ids / unreachable; tie-break deterministic but unspecified |
+| `searchRooms(query, map, limit = 25)` | digits or `#id` → exact id match; otherwise case-insensitive substring on `room.name` (region is the name suffix, so region search works); map order, cut at `limit` |
+
+```js
+import { buildIndex, findPath, searchRooms } from 'arkmap/graph';
+
+const idx = buildIndex(map);
+const hit = searchRooms('karczma', map)[0];
+const path = findPath(currentRoomId, hit.room.id, idx);   // [id, id, …] or null
+```
+
 ### Demo viewer
 
 A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and
-per-level navigation, validation and checksum status) lives in `docs/` and on
+per-level navigation, validation and checksum status, fit-to-window button,
+room search with jump & highlight, and two-field Start/End route planning on
+top of `arkmap/graph`) lives in `docs/` and on
 [GitHub Pages](https://isithunzi000.github.io/arkmap/).
 
 ## Testing & guarantees
@@ -136,8 +159,9 @@ The package is tested against real Arkadia MUD maps in both formats —
 and
 [`.dat`](https://github.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/blob/mapa/map_master3.dat)
 (~27,000 rooms): full round-trip conversions in both directions, checksum
-verification against an external oracle, and deterministic-save guarantees all
-run in CI on Node 18/20/22.
+verification against an external oracle, deterministic-save guarantees and the
+graph suite (pathfinding/search properties on golden fixtures and synthetic
+edge cases) all run in CI on Node 18/20/22.
 
 The Arkadia map data originates from the community crowd-mapping project at
 [Delwing/arkadia-mapa](https://github.com/Delwing/arkadia-mapa).

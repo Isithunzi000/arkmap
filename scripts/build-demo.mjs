@@ -18,7 +18,7 @@ const ORDER = [
   'constants.js', 'arkadia.js', 'ansi-pal.js', 'opposite.js',
   'mudlet-dat.js', 'validate.js', 'checksum.js', 'stable-stringify.js',
   'canonicalize.js', 'dat-to-arkmap.js', 'arkmap-to-dat.js',
-  'suppressors.js', 'arkmap.js',
+  'suppressors.js', 'arkmap.js', 'graph.js',
 ];
 
 const FOOTER = `
@@ -27,6 +27,7 @@ globalThis.arkmap = {
   datToArkmap, arkmapToDat, readMudletDat, writeMudletDat,
   validate, addChecksums, verifyChecksums, checkSuppressorsInMap,
   isArkadiaMap, stableStringify,
+  buildIndex, neighborsOf, findPath, searchRooms,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

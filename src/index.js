@@ -31,5 +31,8 @@ export {
   DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,
 } from './constants.js';
 
+// room graph: indexing, adjacency, Dijkstra pathfinding, room search
+export { buildIndex, neighborsOf, findPath, searchRooms } from './graph.js';
+
 /** Checksum algorithm version implemented by this package ('v4' = XXH3-64 canonical). */
 export const CHECKSUM_ALG = 'v4';

@@ -119,8 +119,8 @@ async function main() {
       catch { console.error(`MISSING: ${path}`); bad++; continue; }
       if (existing !== content) { console.error(`DRIFT: ${path}`); bad++; }
     }
-    // unexpected extra files in src/ (hand-written modules arkmap.js/index.js are allowed)
-    const allowed = new Set([...outputs.keys()].map(p => p.replace(/^src\//, '')).concat(['arkmap.js', 'index.js']));
+    // unexpected extra files in src/ (hand-written modules arkmap.js/index.js/graph.js are allowed)
+    const allowed = new Set([...outputs.keys()].map(p => p.replace(/^src\//, '')).concat(['arkmap.js', 'index.js', 'graph.js']));
     for (const f of readdirSync(join(ROOT, 'src'))) {
       if (!allowed.has(f)) { console.error(`UNEXPECTED: src/${f}`); bad++; }
     }

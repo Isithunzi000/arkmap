@@ -10,6 +10,7 @@
   "exports": {
     ".": "./src/index.js",
     "./arkadia": "./src/arkadia.js",
+    "./graph": "./src/graph.js",
     "./package.json": "./package.json"
   },
   "files": [

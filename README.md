@@ -123,25 +123,94 @@ subpath — kept out of the universal root API:
 import { ARKADIA_ENVS, ARKADIA_SYMBOLS, envPaletteList, isArkadiaMap } from 'arkmap/arkadia';
 ```
 
-#### Graph
+#### Graph & routing
 
-Room graph over a map: indexing, adjacency, Dijkstra pathfinding and room
-search. Available from the root and under the `arkmap/graph` subpath. Pure and
-stateless — same input, same output.
+Room graph over a map: indexing, adjacency, weighted routing (Dijkstra / A*),
+direction filters, locked exits, transport hops, multi-waypoint planning and
+room search. Available from the root and under the `arkmap/graph` subpath.
+Pure and stateless — same input, same output.
+
+Edge weight semantics follow Mudlet: a positive `exit_weights[dir]` wins;
+otherwise the step costs `max(targetRoom.weight, 1)` (default 1).
 
 | function | description |
 |---|---|
 | `buildIndex(map)` | room lookup: `Map(roomId → { room, areaId, areaName })` (duplicate ids: last wins) |
-| `neighborsOf(room)` | adjacency `[[targetId, weight], …]` — `exits` + `special_exits`; weight from `exit_weights`, invalid → 1, 0 is legal |
-| `findPath(fromId, toId, idx)` | shortest path as `[roomId, …]`; `[fromId]` when start = end; `null` for unknown ids / unreachable; tie-break deterministic but unspecified |
+| `edgeWeight(room, dir, targetRoom)` | weight of one exit per the semantics above |
+| `neighborsOf(room, idx?)` | adjacency `[[targetId, weight], …]` — `exits` + `special_exits` (special wins on duplicate target); pass `idx` for full weight semantics |
+| `findPath(fromId, toId, idx)` | shortest path (Dijkstra, default weights) as `[roomId, …]`; `[fromId]` when start = end; `null` for unknown ids / unreachable |
+| `findRoute(fromId, toId, idx, opts?)` | full router → `{ path, hops }`. `opts`: `algorithm` (`'dijkstra'` \| `'astar'`), `dirMode` (`'all'` \| `'cardinal'` \| `'vertical'` — cardinal = compass exits, vertical = compass + up/down), `avoidLocked` (default `true`), `isLocked(room)` override, `transportMode` (`'off'` \| `'normal'` \| `'aggressive'`), `transports` (a document), `transportEdges` (prebuilt), `extraEdges` (ad-hoc virtual edges). `hops[i]` is transport metadata for step `i → i+1` or `null` for walking. Transports force Dijkstra (the A* heuristic is inadmissible over hops) |
+| `planRoute(waypoints, idx, opts?)` | route through consecutive waypoints → `{ legs: [{ from, to, path, hops } \| null], totalSteps, complete }` |
+| `countSpecialSteps(path, idx)` | how many steps of a path use `special_exits` |
 | `searchRooms(query, map, limit = 25)` | digits or `#id` → exact id match; otherwise case-insensitive substring on `room.name` (region is the name suffix, so region search works); map order, cut at `limit` |
 
 ```js
-import { buildIndex, findPath, searchRooms } from 'arkmap/graph';
+import { buildIndex, findRoute, searchRooms } from 'arkmap/graph';
 
 const idx = buildIndex(map);
 const hit = searchRooms('karczma', map)[0];
-const path = findPath(currentRoomId, hit.room.id, idx);   // [id, id, …] or null
+const { path, hops } = findRoute(currentRoomId, hit.room.id, idx, {
+  algorithm: 'astar',
+  dirMode: 'cardinal',
+  transportMode: 'normal',
+  transports: map.transports,          // optional: embedded transport lines
+});
+```
+
+#### Transports
+
+Transport lines (ships, coaches, portals — anything that moves you between
+non-adjacent rooms) use the universal **`arkmap-transports` v1** format, valid
+for any map and any MUD. A document can be embedded in a map file as the
+top-level `map.transports` field or kept as a sidecar JSON:
+
+```jsonc
+{
+  "format": "arkmap-transports",
+  "version": 1,
+  "lines": [
+    {
+      "name": "Wyzima - Novigrad ferry",   // unique — lines are keyed by name
+      "board": ["wsiadz na statek"],        // boarding commands (aliases)
+      "exit": "zejdz ze statku",            // disembark command
+      "legs": [                             // ordered — the ride sequence
+        { "from": 729, "to": 3760, "time": 23, "label": "Bialy Most" }
+      ]
+    }
+  ]
+}
+```
+
+Line order in the array is not semantic (canonical form sorts by name); leg
+order **is** semantic. `time` is in seconds; when omitted, costing assumes
+`TRANSPORT_DEFAULT_TIME` (60). Hop cost = `Σ times · ratio + boarding penalty`
+— one penalty per ride, so a direct crossing beats transfers
+(`normal`: 30 / 0.5, `aggressive`: 10 / 0.1).
+
+**Integrity.** Like rooms and areas, transports can carry canonical XXH3-64
+checksums — a whole-document hash plus one per line
+(`map.checksums.transports = { hash, lines }`), so verification pinpoints
+exactly which line was tampered with, added, or removed. Transport sums are
+reported separately from map-data sums (auxiliary routing data, same class as
+`meta`).
+
+| function | description |
+|---|---|
+| `validateTransports(doc)` | schema validation → `{ ok, errors[] }` with exact paths |
+| `normalizeTransports(raw)` | compact tuple format (`[name, board[], exitCmd, [[from,to,time,label],…]]`, used by Arkadia community data) → standard document |
+| `addTransportChecksums(map)` | sign `map.transports` into `map.checksums.transports` (in place); re-signing after removal clears orphan sums |
+| `verifyTransportChecksums(map)` | verify → `{ present, ok, unsigned?, hashOk, badLines[], missingLines[], extraLines[] }`; never throws |
+| `buildTransportEdges(doc, idx, { mode })` | virtual edges for the router: `Map(roomId → [{ to, cost, hop }])`; chains stop at rooms missing from the map |
+
+Available from the root and under the `arkmap/transports` subpath. Arkadia's
+own transport lines ship as data under `arkmap/arkadia/transports`:
+
+```js
+import { ARKADIA_TRANSPORTS } from 'arkmap/arkadia/transports';
+import { buildIndex, findRoute } from 'arkmap';
+
+const idx = buildIndex(map);
+const route = findRoute(a, b, idx, { transportMode: 'normal', transports: ARKADIA_TRANSPORTS });
 ```
 
 ### Demo viewer

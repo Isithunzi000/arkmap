@@ -210,6 +210,1401 @@ function isArkadiaMap(map, filename) {
 }
 
 
+// ── src/arkadia-transports.js ──
+// arkadia-transports.js — Arkadia MUD transport lines (ships, coaches) in the
+// universal arkmap-transports v1 format. Game-specific DATA layer; the format
+// and tooling live in the universal core (src/transports.js).
+// Source: community transport data (Delwing/arkadia crowd projects), normalized.
+// Hand-written module — plain const + one-line export (build-demo.mjs contract).
+
+const ARKADIA_TRANSPORTS = {
+  "format": "arkmap-transports",
+  "version": 1,
+  "lines": [
+    {
+      "name": "Ard Skellig - Faroe - Rozrog",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 10313,
+          "to": 23669,
+          "time": 55,
+          "label": "Faroe"
+        },
+        {
+          "from": 23669,
+          "to": 3280,
+          "time": 86,
+          "label": "Rozrog"
+        },
+        {
+          "from": 3280,
+          "to": 10313,
+          "time": 29,
+          "label": "Ard Skellig"
+        }
+      ]
+    },
+    {
+      "name": "Ard Skellig - Hindarsfjall",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 10314,
+          "to": 23678,
+          "time": 25,
+          "label": "Hindarsfjall"
+        },
+        {
+          "from": 23678,
+          "to": 10314,
+          "time": 28,
+          "label": "Ard Skellig"
+        }
+      ]
+    },
+    {
+      "name": "Ard Skellig - Novigrad",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 10311,
+          "to": 7907,
+          "time": 63,
+          "label": "Novigrad"
+        },
+        {
+          "from": 7907,
+          "to": 10311,
+          "time": 56,
+          "label": "Ard Skellig"
+        }
+      ]
+    },
+    {
+      "name": "Ard Skellig - Spikeroog",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 10369,
+          "to": 23685,
+          "time": 29,
+          "label": "Spikeroog"
+        },
+        {
+          "from": 23685,
+          "to": 10369,
+          "time": 29,
+          "label": "Ard Skellig"
+        }
+      ]
+    },
+    {
+      "name": "Bialy Most - Hagge",
+      "board": [
+        "wem",
+        "wsiadz do wozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 2188,
+          "to": 1998,
+          "time": 33,
+          "label": "Rinde"
+        },
+        {
+          "from": 1998,
+          "to": 1896,
+          "time": 35,
+          "label": "Murivel"
+        },
+        {
+          "from": 1896,
+          "to": 9990,
+          "time": 37,
+          "label": "Hagge"
+        },
+        {
+          "from": 9990,
+          "to": 1896,
+          "time": 39,
+          "label": "Murivel"
+        },
+        {
+          "from": 1896,
+          "to": 1998,
+          "time": 35,
+          "label": "Rinde"
+        },
+        {
+          "from": 1998,
+          "to": 2188,
+          "time": 33,
+          "label": "Bialy Most"
+        }
+      ]
+    },
+    {
+      "name": "Blaviken - Blekitna Wstega",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 4060,
+          "to": 6428,
+          "time": 174,
+          "label": "Blekitna Wstega"
+        },
+        {
+          "from": 6428,
+          "to": 4060,
+          "time": 174,
+          "label": "Blaviken"
+        }
+      ]
+    },
+    {
+      "name": "Blekitna Wstega - Kreutzhofen",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 6429,
+          "to": 6621,
+          "time": 43,
+          "label": "Kraina Zgromadzenia"
+        },
+        {
+          "from": 6621,
+          "to": 7233,
+          "time": 44,
+          "label": "Nuln"
+        },
+        {
+          "from": 7233,
+          "to": 5207,
+          "time": 43,
+          "label": "Kreutzhofen"
+        },
+        {
+          "from": 5207,
+          "to": 7233,
+          "time": 40,
+          "label": "Nuln"
+        },
+        {
+          "from": 7233,
+          "to": 6621,
+          "time": 40,
+          "label": "Kraina Zgromadzenia"
+        },
+        {
+          "from": 6621,
+          "to": 6429,
+          "time": 40,
+          "label": "Blekitna Wstega"
+        }
+      ]
+    },
+    {
+      "name": "Bretonia - Parravon",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 7732,
+          "to": 7733,
+          "time": 25,
+          "label": "Parravon"
+        },
+        {
+          "from": 7733,
+          "to": 7732,
+          "time": 25,
+          "label": "Bretonia"
+        }
+      ]
+    },
+    {
+      "name": "Carreras - Rivia - Scala",
+      "board": [
+        "wem",
+        "wsiadz do powozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 860,
+          "to": 680,
+          "label": "Scala - zajazd"
+        },
+        {
+          "from": 680,
+          "to": 860,
+          "label": "Scala - rogatki"
+        },
+        {
+          "from": 860,
+          "to": 994,
+          "label": "Gosciniec Rivski"
+        },
+        {
+          "from": 994,
+          "to": 266,
+          "label": "Przelecz"
+        },
+        {
+          "from": 266,
+          "to": 994,
+          "label": "Gosciniec Rivski"
+        },
+        {
+          "from": 994,
+          "to": 860,
+          "label": "Scala - rogatki"
+        }
+      ]
+    },
+    {
+      "name": "Jouinard - Nuln",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 7640,
+          "to": 7550,
+          "time": 42,
+          "label": "Bogenhafen"
+        },
+        {
+          "from": 7550,
+          "to": 7458,
+          "time": 27,
+          "label": "Zajazd 'Pod Srebrnym Grotem'"
+        },
+        {
+          "from": 7458,
+          "to": 7332,
+          "time": 37,
+          "label": "Nuln"
+        },
+        {
+          "from": 7332,
+          "to": 7458,
+          "time": 37,
+          "label": "Zajazd 'Pod Srebrnym Grotem'"
+        },
+        {
+          "from": 7458,
+          "to": 7550,
+          "time": 27,
+          "label": "Bogenhafen"
+        },
+        {
+          "from": 7550,
+          "to": 7640,
+          "time": 41,
+          "label": "Jouinard"
+        }
+      ]
+    },
+    {
+      "name": "Karak Varn - Blekitna Wstega",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 15409,
+          "to": 6427,
+          "time": 41,
+          "label": "Blekitna Wstega"
+        },
+        {
+          "from": 6427,
+          "to": 15409,
+          "time": 40,
+          "label": "Karak Varn"
+        }
+      ]
+    },
+    {
+      "name": "Kraina Zgromadzenia - Nuln",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 6727,
+          "to": 6571,
+          "time": 19,
+          "label": "Karczma 'Czarny Kon'"
+        },
+        {
+          "from": 6571,
+          "to": 6779,
+          "time": 17,
+          "label": "Blutdorf"
+        },
+        {
+          "from": 6779,
+          "to": 7256,
+          "time": 27,
+          "label": "Nuln"
+        },
+        {
+          "from": 7256,
+          "to": 6779,
+          "time": 27,
+          "label": "Blutdorf"
+        },
+        {
+          "from": 6779,
+          "to": 6571,
+          "time": 17,
+          "label": "Karczma 'Czarny Kon'"
+        },
+        {
+          "from": 6571,
+          "to": 6727,
+          "time": 19,
+          "label": "Kraina Zgromadzenia"
+        }
+      ]
+    },
+    {
+      "name": "Kreutzhofen - Alimento",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 5206,
+          "to": 5601,
+          "time": 49,
+          "label": "Alimento"
+        },
+        {
+          "from": 5601,
+          "to": 5206,
+          "time": 68,
+          "label": "Kreutzhofen"
+        }
+      ]
+    },
+    {
+      "name": "Laki pod Quenelles - Zachod Quenelles",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 4841,
+          "to": 4824,
+          "time": 30,
+          "label": "Zachod Quenelles"
+        },
+        {
+          "from": 4824,
+          "to": 4841,
+          "time": 30,
+          "label": "Laki pod Quenelles"
+        }
+      ]
+    },
+    {
+      "name": "Maribor - Grabowa Buchta",
+      "board": [
+        "wem",
+        "wsiadz do wozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 3525,
+          "to": 3457,
+          "time": 22,
+          "label": "Kocie Pole"
+        },
+        {
+          "from": 3457,
+          "to": 3343,
+          "time": 38,
+          "label": "Zajazd u Marfa"
+        },
+        {
+          "from": 3343,
+          "to": 180,
+          "time": 43,
+          "label": "Maribor"
+        },
+        {
+          "from": 180,
+          "to": 3343,
+          "time": 42,
+          "label": "Zajazd u Marfa"
+        },
+        {
+          "from": 3343,
+          "to": 3457,
+          "time": 38,
+          "label": "Kocie Pole"
+        },
+        {
+          "from": 3457,
+          "to": 3525,
+          "time": 21,
+          "label": "Grabowa Buchta"
+        }
+      ]
+    },
+    {
+      "name": "Maribor - Obawa",
+      "board": [
+        "wem",
+        "wsiadz do powozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 180,
+          "to": 536,
+          "label": "Brugge"
+        },
+        {
+          "from": 536,
+          "to": 3043,
+          "label": "Bialy Kiel"
+        },
+        {
+          "from": 3043,
+          "to": 3221,
+          "label": "Obawa"
+        },
+        {
+          "from": 3221,
+          "to": 3043,
+          "label": "Bialy Kiel"
+        },
+        {
+          "from": 3043,
+          "to": 536,
+          "label": "Brugge"
+        },
+        {
+          "from": 536,
+          "to": 180,
+          "label": "Maribor"
+        }
+      ]
+    },
+    {
+      "name": "Mekan - Baccala",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 23792,
+          "to": 9707,
+          "time": 91,
+          "label": "Baccala"
+        },
+        {
+          "from": 9707,
+          "to": 23792,
+          "time": 95,
+          "label": "Mekan"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Baccala",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 7910,
+          "to": 3281,
+          "time": 107,
+          "label": "Rozrog"
+        },
+        {
+          "from": 3281,
+          "to": 9705,
+          "time": 76,
+          "label": "Baccala"
+        },
+        {
+          "from": 9705,
+          "to": 3281,
+          "time": 76,
+          "label": "Rozrog"
+        },
+        {
+          "from": 3281,
+          "to": 7910,
+          "time": 107,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Blaviken - Daevon",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 2223,
+          "to": 4061,
+          "time": 45,
+          "label": "Blaviken"
+        },
+        {
+          "from": 4061,
+          "to": 11690,
+          "time": 42,
+          "label": "Daevon"
+        },
+        {
+          "from": 11690,
+          "to": 4058,
+          "time": 55,
+          "label": "Blaviken"
+        },
+        {
+          "from": 4058,
+          "to": 2223,
+          "time": 55,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Nadrzecze",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 7903,
+          "to": 10486,
+          "time": 30,
+          "label": "Stocznia w Novigradzie"
+        },
+        {
+          "from": 10486,
+          "to": 3583,
+          "time": 28,
+          "label": "Nadrzecze"
+        },
+        {
+          "from": 3583,
+          "to": 10486,
+          "time": 26,
+          "label": "Stocznia w Novigradzie"
+        },
+        {
+          "from": 10486,
+          "to": 7903,
+          "time": 26,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Oxenfurt",
+      "board": [
+        "wem",
+        "wsiadz do powozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 829,
+          "to": 804,
+          "time": 20,
+          "label": "Oxenfurt"
+        },
+        {
+          "from": 804,
+          "to": 829,
+          "time": 20,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Oxenfurt - Bialy Most",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 7908,
+          "to": 2467,
+          "time": 40,
+          "label": "Oxenfurt"
+        },
+        {
+          "from": 2467,
+          "to": 2212,
+          "time": 40,
+          "label": "Bialy Most"
+        },
+        {
+          "from": 2212,
+          "to": 7908,
+          "time": 30,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Novigrad - Wyspa Milosci",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 7911,
+          "to": 11153,
+          "time": 91,
+          "label": "Wyspa Milosci"
+        },
+        {
+          "from": 11153,
+          "to": 7911,
+          "time": 86,
+          "label": "Novigrad"
+        }
+      ]
+    },
+    {
+      "name": "Nuln - Blekitna Wstega",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 6879,
+          "to": 7131,
+          "time": 19,
+          "label": "Tadrig"
+        },
+        {
+          "from": 7131,
+          "to": 7086,
+          "time": 21,
+          "label": "Heideck"
+        },
+        {
+          "from": 7086,
+          "to": 6520,
+          "time": 14,
+          "label": "Averheim"
+        },
+        {
+          "from": 6520,
+          "to": 6448,
+          "time": 13,
+          "label": "Podzamcze twierdzy Sigmarytow"
+        },
+        {
+          "from": 6448,
+          "to": 6430,
+          "time": 13,
+          "label": "Przystan na Blekitnej Wstedze"
+        },
+        {
+          "from": 6430,
+          "to": 6448,
+          "time": 13,
+          "label": "Podzamcze twierdzy Sigmarytow"
+        },
+        {
+          "from": 6448,
+          "to": 6520,
+          "time": 13,
+          "label": "Averheim"
+        },
+        {
+          "from": 6520,
+          "to": 7086,
+          "time": 14,
+          "label": "Heideck"
+        },
+        {
+          "from": 7086,
+          "to": 7131,
+          "time": 21,
+          "label": "Tadrig"
+        },
+        {
+          "from": 7131,
+          "to": 6879,
+          "time": 19,
+          "label": "Nuln"
+        }
+      ]
+    },
+    {
+      "name": "Nuln - Bogenhafen",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 6891,
+          "to": 7568,
+          "time": 43,
+          "label": "Bogenhafen"
+        },
+        {
+          "from": 7568,
+          "to": 6891,
+          "time": 40,
+          "label": "Nuln"
+        }
+      ]
+    },
+    {
+      "name": "Obawa zach. - Novigrad - Obawa srod. - Scala",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 3247,
+          "to": 7912,
+          "time": 73,
+          "label": "Novigrad"
+        },
+        {
+          "from": 7912,
+          "to": 3248,
+          "time": 58,
+          "label": "Obawa srod."
+        },
+        {
+          "from": 3248,
+          "to": 927,
+          "time": 56,
+          "label": "Scala"
+        },
+        {
+          "from": 927,
+          "to": 3247,
+          "time": 77,
+          "label": "Obawa zach."
+        }
+      ]
+    },
+    {
+      "name": "Oxenfurt - Blaviken",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 2574,
+          "to": 4059,
+          "time": 55,
+          "label": "Blaviken"
+        },
+        {
+          "from": 4059,
+          "to": 2574,
+          "time": 55,
+          "label": "Oxenfurt"
+        }
+      ]
+    },
+    {
+      "name": "Oxenfurt - Grabowa Buchta",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 2464,
+          "to": 3542,
+          "time": 29,
+          "label": "Grabowa Buchta"
+        },
+        {
+          "from": 3542,
+          "to": 2464,
+          "time": 33,
+          "label": "Oxenfurt"
+        }
+      ]
+    },
+    {
+      "name": "Piana - Stare Buki",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 2616,
+          "to": 10018,
+          "time": 42,
+          "label": "Hagge"
+        },
+        {
+          "from": 10018,
+          "to": 8087,
+          "time": 42,
+          "label": "Stare Buki"
+        },
+        {
+          "from": 8087,
+          "to": 10018,
+          "time": 56,
+          "label": "Hagge"
+        },
+        {
+          "from": 10018,
+          "to": 2616,
+          "time": 63,
+          "label": "Piana"
+        }
+      ]
+    },
+    {
+      "name": "Podgrodzie Tretogoru - Gelibol",
+      "board": [
+        "wem",
+        "wsiadz do wozu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 3926,
+          "to": 4092,
+          "label": "Sucha Kepa"
+        },
+        {
+          "from": 4092,
+          "to": 4163,
+          "label": "Gelibol"
+        },
+        {
+          "from": 4163,
+          "to": 4092,
+          "label": "Sucha Kepa"
+        },
+        {
+          "from": 4092,
+          "to": 3926,
+          "label": "Podgrodzie Tretogoru"
+        }
+      ]
+    },
+    {
+      "name": "Poludniowy brzeg Pontaru - Polnocny brzeg Pontaru",
+      "board": [
+        "wsiadz na statek"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 2624,
+          "to": 3442,
+          "time": 25,
+          "label": "Polnocny brzeg Pontaru"
+        },
+        {
+          "from": 3442,
+          "to": 2624,
+          "time": 25,
+          "label": "Poludniowy brzeg Pontaru"
+        }
+      ]
+    },
+    {
+      "name": "Quenelles - Marguilles",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 4653,
+          "to": 4890,
+          "time": 33,
+          "label": "Marguilles"
+        },
+        {
+          "from": 4890,
+          "to": 4653,
+          "time": 29,
+          "label": "Quenelles"
+        }
+      ]
+    },
+    {
+      "name": "Quenelles - Obawa",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 4651,
+          "to": 3251,
+          "time": 179,
+          "label": "Obawa"
+        },
+        {
+          "from": 3251,
+          "to": 4651,
+          "time": 179,
+          "label": "Quenelles"
+        }
+      ]
+    },
+    {
+      "name": "Quenelles - Parravon",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 4659,
+          "to": 7786,
+          "time": 44,
+          "label": "Montlac"
+        },
+        {
+          "from": 7786,
+          "to": 7744,
+          "time": 7,
+          "label": "Merceaux-Descloux"
+        },
+        {
+          "from": 7744,
+          "to": 26659,
+          "time": 7,
+          "label": "Parravon"
+        },
+        {
+          "from": 26659,
+          "to": 7744,
+          "time": 7,
+          "label": "Merceaux-Descloux"
+        },
+        {
+          "from": 7744,
+          "to": 7786,
+          "time": 16,
+          "label": "Montlac"
+        },
+        {
+          "from": 7786,
+          "to": 4659,
+          "time": 44,
+          "label": "Quenelles"
+        }
+      ]
+    },
+    {
+      "name": "Rozrog - Mekan",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 3273,
+          "to": 23708,
+          "time": 50,
+          "label": "Mekan"
+        },
+        {
+          "from": 23708,
+          "to": 3273,
+          "time": 46,
+          "label": "Rozrog"
+        }
+      ]
+    },
+    {
+      "name": "Salignac - Nuln",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 4922,
+          "to": 4985,
+          "time": 11,
+          "label": "'Pod piegowata elfka'"
+        },
+        {
+          "from": 4985,
+          "to": 5200,
+          "time": 50,
+          "label": "Kreutzhofen"
+        },
+        {
+          "from": 5200,
+          "to": 6903,
+          "time": 49,
+          "label": "Nuln"
+        },
+        {
+          "from": 6903,
+          "to": 5200,
+          "time": 49,
+          "label": "Kreutzhofen"
+        },
+        {
+          "from": 5200,
+          "to": 4985,
+          "time": 53,
+          "label": "'Pod piegowata elfka'"
+        },
+        {
+          "from": 4985,
+          "to": 4922,
+          "time": 12,
+          "label": "Salignac La Rouge"
+        }
+      ]
+    },
+    {
+      "name": "Urbimo - Novigrad",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 5947,
+          "to": 7909,
+          "time": 199,
+          "label": "Novigrad"
+        },
+        {
+          "from": 7909,
+          "to": 5947,
+          "time": 199,
+          "label": "Urbimo"
+        }
+      ]
+    },
+    {
+      "name": "Urbimo - Toscania",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 5887,
+          "to": 5439,
+          "time": 47,
+          "label": "Incrocio alla Miragliano"
+        },
+        {
+          "from": 5439,
+          "to": 5373,
+          "time": 14,
+          "label": "Ebino"
+        },
+        {
+          "from": 5373,
+          "to": 5308,
+          "time": 27,
+          "label": "Toscania"
+        },
+        {
+          "from": 5308,
+          "to": 5373,
+          "time": 28,
+          "label": "Ebino"
+        },
+        {
+          "from": 5373,
+          "to": 5439,
+          "time": 14,
+          "label": "Incrocio alla Miragliano"
+        },
+        {
+          "from": 5439,
+          "to": 5887,
+          "time": 47,
+          "label": "Urbimo"
+        }
+      ]
+    },
+    {
+      "name": "Urbimo - Wyspa Milosci",
+      "board": [
+        "wem",
+        "kup bilet",
+        "wsiadz na statek",
+        "wlm"
+      ],
+      "exit": "zejdz ze statku",
+      "legs": [
+        {
+          "from": 5946,
+          "to": 11154,
+          "time": 85,
+          "label": "Wyspa Milosci"
+        },
+        {
+          "from": 11154,
+          "to": 5946,
+          "time": 87,
+          "label": "Urbimo"
+        }
+      ]
+    },
+    {
+      "name": "Varieno - Miragliano - Campogrotta",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 5468,
+          "to": 5439,
+          "time": 25,
+          "label": "Miragliano"
+        },
+        {
+          "from": 5439,
+          "to": 5625,
+          "time": 15,
+          "label": "Viadaza"
+        },
+        {
+          "from": 5625,
+          "to": 5842,
+          "time": 15,
+          "label": "Urbimo"
+        },
+        {
+          "from": 5842,
+          "to": 5985,
+          "time": 25,
+          "label": "Varieno"
+        },
+        {
+          "from": 5985,
+          "to": 5842,
+          "time": 25,
+          "label": "Urbimo"
+        },
+        {
+          "from": 5842,
+          "to": 5625,
+          "time": 15,
+          "label": "Viadaza"
+        },
+        {
+          "from": 5625,
+          "to": 5439,
+          "time": 15,
+          "label": "Miragliano"
+        },
+        {
+          "from": 5439,
+          "to": 5468,
+          "time": 25,
+          "label": "Campogrotta"
+        }
+      ]
+    },
+    {
+      "name": "Wyzima - Oxenfurt",
+      "board": [
+        "wem",
+        "wsiadz do dylizansu",
+        "wlm"
+      ],
+      "exit": "wyjscie",
+      "legs": [
+        {
+          "from": 729,
+          "to": 3760,
+          "time": 19,
+          "label": "Anchor"
+        },
+        {
+          "from": 3760,
+          "to": 746,
+          "time": 23,
+          "label": "Bialy Most"
+        },
+        {
+          "from": 746,
+          "to": 764,
+          "time": 15,
+          "label": "Piana"
+        },
+        {
+          "from": 764,
+          "to": 790,
+          "time": 21,
+          "label": "Podgrodzie Oxenfurtu"
+        },
+        {
+          "from": 790,
+          "to": 764,
+          "time": 22,
+          "label": "Piana"
+        },
+        {
+          "from": 764,
+          "to": 746,
+          "time": 15,
+          "label": "Bialy Most"
+        },
+        {
+          "from": 746,
+          "to": 3760,
+          "time": 23,
+          "label": "Anchor"
+        },
+        {
+          "from": 3760,
+          "to": 729,
+          "time": 18,
+          "label": "Wyzima"
+        }
+      ]
+    }
+  ]
+};
+
+
 // ── src/ansi-pal.js ──
 // GENERATED by scripts/extract.mjs — DO NOT EDIT.
 // Source: Isithunzi000/arkadia-web_standalone-arkmap_studio/arkmap_studio.html @ 24bd9022895753779758e5c58286565c76d85d19 (lines 7201-7218)
@@ -2989,19 +4384,232 @@ function createEmptyMap(name = 'New map') {
   };
 }
 
+// ── src/transports.js ──
+// transports.js — universal transport lines (ships, coaches, portals) for any map.
+//
+// Hand-written module (not extracted from the standalone app).
+// Standard `arkmap-transports` v1: a document (embedded as map.transports or kept
+// as a sidecar JSON) describing named lines; each line has boarding commands,
+// an exit command and ordered legs { from, to, time, label }. Leg order is
+// semantic (it defines the ride); line order in the array is not.
+//
+// Integrity: addTransportChecksums/verifyTransportChecksums sign and verify the
+// document per line (checksums.transports = { hash, lines }), mirroring the
+// room/area checksum pattern. Transport sums are reported separately from the
+// map data sums (auxiliary routing data — same class as meta, design D2).
+//
+// Keep this file bundler-friendly for scripts/build-demo.mjs:
+// plain function/const declarations, single-line imports, one-line export list.
+
+
+// Cost model (same values as the reference implementation): hop cost =
+// sum(leg times) * ratio + one boarding penalty per ride. The penalty covers
+// the average wait for departure, so a direct crossing beats transfers.
+const TRANSPORT_BOARDING_PENALTY = { normal: 30, aggressive: 10 };
+const TRANSPORT_TIME_RATIO = { normal: 0.5, aggressive: 0.1 };
+const TRANSPORT_DEFAULT_TIME = 60;   // when a leg has no measured time
+
+const TRANSPORTS_FORMAT = 'arkmap-transports';
+const TRANSPORTS_VERSION = 1;
+
+// ── validation ─────────────────────────────────────────────────────────────
+
+function validateTransports(doc) {
+  const errors = [];
+  const err = (path, msg) => errors.push({ path, msg });
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return { ok: false, errors: [{ path: 'transports', msg: 'must be an object' }] };
+  }
+  if (doc.format !== TRANSPORTS_FORMAT) err('transports.format', `must be '${TRANSPORTS_FORMAT}'`);
+  if (doc.version !== TRANSPORTS_VERSION) err('transports.version', `must be ${TRANSPORTS_VERSION}`);
+  if (!Array.isArray(doc.lines)) {
+    err('transports.lines', 'must be an array');
+    return { ok: false, errors };
+  }
+  const seen = new Set();
+  for (let i = 0; i < doc.lines.length; i++) {
+    const L = doc.lines[i], p = `transports.lines[${i}]`;
+    if (!L || typeof L !== 'object') { err(p, 'must be an object'); continue; }
+    if (typeof L.name !== 'string' || !L.name.trim()) err(`${p}.name`, 'must be a non-empty string');
+    else if (seen.has(L.name)) err(`${p}.name`, `duplicate line name '${L.name}' (lines are keyed by name)`);
+    else seen.add(L.name);
+    if (!Array.isArray(L.board) || !L.board.length || L.board.some(c => typeof c !== 'string')) {
+      err(`${p}.board`, 'must be a non-empty array of strings');
+    }
+    if (typeof L.exit !== 'string' || !L.exit.trim()) err(`${p}.exit`, 'must be a non-empty string');
+    if (!Array.isArray(L.legs) || !L.legs.length) { err(`${p}.legs`, 'must be a non-empty array'); continue; }
+    for (let j = 0; j < L.legs.length; j++) {
+      const g = L.legs[j], gp = `${p}.legs[${j}]`;
+      if (!g || typeof g !== 'object') { err(gp, 'must be an object'); continue; }
+      if (!Number.isInteger(g.from) || g.from <= 0) err(`${gp}.from`, 'must be a positive integer room id');
+      if (!Number.isInteger(g.to) || g.to <= 0) err(`${gp}.to`, 'must be a positive integer room id');
+      if (g.time !== undefined && g.time !== null && (typeof g.time !== 'number' || !(g.time > 0))) {
+        err(`${gp}.time`, 'must be a positive number, null or omitted');
+      }
+      if (g.label !== undefined && g.label !== null && typeof g.label !== 'string') {
+        err(`${gp}.label`, 'must be a string, null or omitted');
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+// ── normalization ──────────────────────────────────────────────────────────
+
+// normalizeTransports(raw) — accepts the compact tuple format used by the
+// Arkadia community data source ([name, board[], exitCmd, [[from,to,time,label], ...]])
+// and returns a standard arkmap-transports v1 document.
+function normalizeTransports(raw) {
+  const lines = [];
+  for (const entry of raw || []) {
+    const [name, board, exitCmd, stops] = entry;
+    const legs = [];
+    for (const s of stops || []) {
+      const leg = { from: s[0], to: s[1] };
+      if (s[2] != null) leg.time = s[2];
+      if (s[3] != null) leg.label = s[3];
+      legs.push(leg);
+    }
+    lines.push({ name, board: [...(board || [])], exit: exitCmd, legs });
+  }
+  return { format: TRANSPORTS_FORMAT, version: TRANSPORTS_VERSION, lines };
+}
+
+// Canonical forms for hashing: undefined fields dropped; lines sorted by name
+// (array order is not semantic); leg order preserved (it defines the ride).
+function _canonLeg(g) {
+  const o = { from: g.from, to: g.to };
+  if (g.time != null) o.time = g.time;
+  if (g.label != null) o.label = g.label;
+  return o;
+}
+function _canonLine(L) {
+  return { name: L.name, board: [...L.board], exit: L.exit, legs: L.legs.map(_canonLeg) };
+}
+function _canonDoc(doc) {
+  return {
+    format: doc.format, version: doc.version,
+    lines: (doc.lines || []).map(_canonLine).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+  };
+}
+function _hash(obj) {
+  return xxh3_64hex(new TextEncoder().encode(stableStringify(obj)));
+}
+
+// ── integrity (checksums.transports) ───────────────────────────────────────
+
+// addTransportChecksums(map) — sign map.transports into the checksums envelope
+// (map.checksums.transports = { hash, lines }). Independent of addChecksums
+// ordering; without map.transports any stored transport sums are removed, so
+// a re-save never leaves orphan signatures. In place, returns map.
+function addTransportChecksums(map) {
+  if (!map.checksums) map.checksums = { alg: 'v4' };
+  if (!map.transports) { delete map.checksums.transports; return map; }
+  const canon = _canonDoc(map.transports);
+  const lines = {};
+  for (const L of canon.lines) lines[L.name] = _hash(L);
+  map.checksums.transports = { hash: _hash(canon), lines };
+  return map;
+}
+
+// verifyTransportChecksums(map) — never throws. Returns:
+//   { present, ok, unsigned?, badLines, missingLines, extraLines, verifyError? }
+// Semantics mirror room/area sums: badLines = content changed; missingLines =
+// line added after signing (unsigned); extraLines = signature orphan (line removed).
+function verifyTransportChecksums(map) {
+  const none = { badLines: [], missingLines: [], extraLines: [] };
+  const stored = map?.checksums?.transports;
+  const doc = map?.transports;
+  if (!stored && !doc) return { present: false, ok: true, ...none };
+  if (!stored && doc) {
+    return { present: false, ok: true, unsigned: true, ...none,
+             lineCount: Array.isArray(doc.lines) ? doc.lines.length : 0 };
+  }
+  let current;
+  try { current = doc ? _canonDoc(doc) : null; }
+  catch { return { present: true, ok: false, verifyError: true, ...none }; }
+  const storedLines = stored.lines || {};
+  if (!current) {
+    return { present: true, ok: false, hashOk: false,
+             badLines: [], missingLines: [], extraLines: Object.keys(storedLines).sort() };
+  }
+  const curLines = {};
+  for (const L of current.lines) curLines[L.name] = _hash(L);
+  const badLines = [], missingLines = [], extraLines = [];
+  for (const name of Object.keys(curLines)) {
+    if (!(name in storedLines)) missingLines.push(name);
+    else if (storedLines[name] !== curLines[name]) badLines.push(name);
+  }
+  for (const name of Object.keys(storedLines)) {
+    if (!(name in curLines)) extraLines.push(name);
+  }
+  badLines.sort(); missingLines.sort(); extraLines.sort();
+  const hashOk = stored.hash === _hash(current);
+  return { present: true, ok: hashOk && !badLines.length && !missingLines.length && !extraLines.length,
+           hashOk, badLines, missingLines, extraLines };
+}
+
+// ── routing edges ──────────────────────────────────────────────────────────
+
+// buildTransportEdges(doc, idx, opts) — virtual edges for the router:
+// Map(roomId -> [{ to, cost, hop }]). idx is a room index from buildIndex();
+// chains stop at rooms missing from the map (foreign map segment). A hop
+// carries { name, board, exit, from, to, label, via, time } for display.
+function buildTransportEdges(doc, idx, opts) {
+  const mode = (opts && opts.mode) || 'normal';
+  const penalty = TRANSPORT_BOARDING_PENALTY[mode];
+  const ratio = TRANSPORT_TIME_RATIO[mode];
+  const edges = new Map();
+  if (penalty === undefined) return edges;   // unknown mode — no edges (fail-closed)
+  for (const L of (doc && doc.lines) || []) {
+    const stops = L.legs.map(g => [g.from, g.to, g.time, g.label]);
+    const n = stops.length;
+    for (let i = 0; i < n; i++) {
+      const fromId = stops[i][0];
+      if (!idx.has(fromId)) continue;
+      let cumTime = 0, chainFrom = fromId;
+      const via = [];
+      for (let off = 0; off < n; off++) {
+        const s = stops[(i + off) % n];
+        if (s[0] !== chainFrom) break;              // chain must stay contiguous
+        cumTime += (typeof s[2] === 'number' && s[2] > 0) ? s[2] : TRANSPORT_DEFAULT_TIME;
+        const toId = s[1];
+        if (toId === fromId) break;                 // return loop — skip
+        if (!idx.has(toId)) break;                  // room not in this map
+        const hop = { name: L.name, board: L.board, exit: L.exit, from: fromId, to: toId,
+                      label: s[3] ?? null, via: via.slice(), time: cumTime };
+        const cost = cumTime * ratio + penalty;
+        if (!edges.has(fromId)) edges.set(fromId, []);
+        edges.get(fromId).push({ to: toId, cost, hop });
+        via.push(s[3]);
+        chainFrom = toId;
+      }
+    }
+  }
+  return edges;
+}
+
+
 // ── src/graph.js ──
 // graph.js — room graph over an arkmap map: indexing, adjacency, pathfinding, search.
 //
 // Hand-written module (not extracted from the standalone app).
 // Pure and stateless: no I/O, no randomness, no clock — same input, same output.
 //
-// Adjacency: room.exits + room.special_exits. Edge weight comes from
-// room.exit_weights[dir|cmd]; missing/invalid weight (non-number, negative,
-// non-finite) falls back to 1. Weight 0 is legal. Exit targets that do not
-// resolve to a room in the index are skipped (dangling exits are tolerated).
+// Routing parity with the reference planner:
+// - edge weight: exit_weights[dir] when a positive number, else max(target.weight ?? 1, 1)
+//   (Mudlet semantics — the destination room's weight is the default step cost);
+// - dirMode filter: 'cardinal' = compass n..nw; 'vertical' = + up/down/in/out;
+//   'all' = + special exits (special exits never pass 'cardinal'/'vertical');
+// - locked exits (exit_locks / special_exit_locks) are always skipped;
+//   locked rooms are skipped when avoidLocked (except as the route start);
+// - transports (arkmap-transports) are virtual edges OUTSIDE the dirMode filter;
+//   with transports or extraEdges active the router always uses Dijkstra
+//   (the A* heuristic is inadmissible over hops), exactly like the reference.
 //
 // Keep this file bundler-friendly for scripts/build-demo.mjs:
-// `export function` declarations only, no import statements, no export lists.
+// plain function/const declarations, single-line imports, one-line export list.
+
 
 /**
  * Build a room lookup index over all areas.
@@ -3019,34 +4627,175 @@ function buildIndex(map) {
   return idx;
 }
 
+// Edge weight (reference parity): explicit positive exit_weights[dir] wins;
+// otherwise the destination room's weight (Mudlet room weight), min 1.
+// exit_weights of 0 / negative / NaN count as unset; Infinity passes through
+// (an effectively blocked edge — Dijkstra simply never relaxes it).
+function edgeWeight(room, dir, nbr) {
+  const ew = room.exit_weights?.[dir];
+  if (typeof ew === 'number' && ew > 0) return ew;
+  const w = nbr?.weight;
+  return Math.max(typeof w === 'number' && w > 0 ? w : 1, 1);
+}
+
 /**
  * Adjacency list of a room: [[targetRoomId, weight], ...].
  * Regular exits first (in key order), then special exits. Dangling targets
- * are NOT filtered here (findPath skips them against the index).
+ * are NOT filtered here (findPath/findRoute skip them against the index).
+ * Pass idx (buildIndex result) for reference-parity weights (destination room
+ * weight); without idx the weight falls back to exit_weights / 1.
  * @param {object} room
+ * @param {Map<number, {room: object}>} [idx]
  * @returns {Array<[number, number]>}
  */
-function neighborsOf(room) {
+function neighborsOf(room, idx) {
   const out = [];
   for (const [dir, tgt] of Object.entries(room.exits || {})) {
-    let w = room.exit_weights?.[dir];
-    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
-    out.push([tgt, w]);
+    out.push([tgt, edgeWeight(room, dir, idx?.get(tgt)?.room)]);
   }
   for (const [cmd, tgt] of Object.entries(room.special_exits || {})) {
-    let w = room.exit_weights?.[cmd];
-    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
-    out.push([tgt, w]);
+    out.push([tgt, edgeWeight(room, cmd, idx?.get(tgt)?.room)]);
   }
   return out;
+}
+
+// ── binary heap of [cost, roomId] (deterministic; ties unspecified) ────────
+function _heapPush(heap, item) {
+  heap.push(item);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const p = (i - 1) >> 1;
+    if (heap[p][0] <= heap[i][0]) break;
+    [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
+  }
+}
+function _heapPop(heap) {
+  const top = heap[0], last = heap.pop();
+  if (heap.length) {
+    heap[0] = last;
+    let i = 0;
+    for (;;) {
+      const l = 2 * i + 1, r = l + 1;
+      let m = i;
+      if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+      if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+      if (m === i) break;
+      [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+    }
+  }
+  return top;
+}
+
+// ── cached-shape adjacency build (per call; the package is stateless) ──────
+// Entry: { id, w, cls, lk, x, y, z }
+//   cls 0 = compass (n..nw), 1 = vertical (up/down/in/out), 2 = special/unknown
+//   lk  = locked exit (exit_locks / special_exit_locks) — always skipped
+// Merge priority on key collision: special_exits override exits (reference parity).
+// Also builds areaMin: min edge weight between distinct areas (A* area heuristic).
+function _adjBuild(idx) {
+  const adj = new Map(), areaMin = new Map();
+  for (const [id, e] of idx) {
+    const room = e.room;
+    const exits = room.exits, se = room.special_exits;
+    if (!exits && !se) continue;
+    const exitLockSet = room.exit_locks?.length ? new Set(room.exit_locks) : null;
+    const specLockSet = room.special_exit_locks?.length ? new Set(room.special_exit_locks) : null;
+    const merged = [];
+    const posByDir = new Map();
+    const put = (dir, nid, isSpecial) => {
+      const at = posByDir.get(dir);
+      if (at === undefined) { posByDir.set(dir, merged.length); merged.push({ dir, nid, isSpecial }); }
+      else { const m = merged[at]; m.nid = nid; m.isSpecial = true; }
+    };
+    if (exits) for (const dir in exits) put(dir, exits[dir], false);
+    if (se) for (const dir in se) put(dir, se[dir], true);
+    const out = [];
+    for (const m of merged) {
+      const nid = m.nid;
+      if (!nid) continue;
+      const nbr = idx.get(nid)?.room;
+      if (!nbr) continue;
+      let cls;
+      if (m.isSpecial) cls = 2;
+      else { const d = DIR_BY_SHORT[m.dir]; cls = !d ? 2 : (d.idx <= 8 ? 0 : 1); }
+      out.push({
+        id: nid,
+        w: edgeWeight(room, m.dir, nbr),
+        cls,
+        lk: !!((exitLockSet && exitLockSet.has(m.dir)) || (specLockSet && specLockSet.has(m.dir))),
+        x: nbr.x, y: nbr.y, z: nbr.z ?? 0,
+      });
+    }
+    if (!out.length) continue;
+    out.sort((a, b) => a.id - b.id);   // stable — ties keep insertion order
+    adj.set(+id, out);
+    const a = e.areaId;
+    for (const edge of out) {
+      const b = idx.get(edge.id)?.areaId;
+      if (b === undefined || b === a) continue;
+      let tos = areaMin.get(a);
+      if (!tos) { tos = new Map(); areaMin.set(a, tos); }
+      if (edge.w < (tos.get(b) ?? Infinity)) tos.set(b, edge.w);
+    }
+  }
+  return { adj, areaMin };
+}
+
+// Distances of areas TO the target area over the area graph (reverse Dijkstra).
+function _areaDistances(areaMin, areaTo) {
+  const dist = new Map([[areaTo, 0]]);
+  const rev = new Map();
+  for (const [a, tos] of areaMin) {
+    for (const [b, w] of tos) {
+      let l = rev.get(b);
+      if (!l) { l = []; rev.set(b, l); }
+      l.push({ from: a, w });
+    }
+  }
+  const heap = [[0, areaTo]];
+  while (heap.length) {
+    const [d, a] = _heapPop(heap);
+    if (d > (dist.get(a) ?? Infinity)) continue;
+    const l = rev.get(a);
+    if (!l) continue;
+    for (const e of l) {
+      const nd = d + e.w;
+      if (nd < (dist.get(e.from) ?? Infinity)) { dist.set(e.from, nd); _heapPush(heap, [nd, e.from]); }
+    }
+  }
+  return dist;
+}
+
+// A* scan parameters: max geometric edge length and min edge weight.
+function _astarParams(idx, adj) {
+  let maxDist = 1, minW = Infinity;
+  for (const [id, out] of adj) {
+    const room = idx.get(id)?.room;
+    if (!room) continue;
+    for (const e of out) {
+      const dx = e.x - room.x, dy = e.y - room.y, dz = e.z - (room.z ?? 0);
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist > maxDist) maxDist = dist;
+      if (e.w < minW) minW = e.w;
+    }
+  }
+  if (!Number.isFinite(minW)) minW = 1;
+  return { maxEdgeDist: maxDist, minEdgeW: minW };
+}
+
+function _dirAllowedCls(cls, dirMode) {
+  if (cls === 2) return dirMode === 'all';
+  if (cls === 1) return dirMode !== 'cardinal';
+  return true;
 }
 
 /**
  * Shortest path between two rooms (Dijkstra over exits + special_exits).
  * Returns an array of room ids from fromId to toId inclusive, [fromId] when
  * from === to, or null when either id is unknown or the target is unreachable.
- * Among equal-cost shortest paths the choice is deterministic but unspecified
- * — do not rely on a specific tie-break.
+ * Weights follow reference parity (see edgeWeight). Among equal-cost shortest
+ * paths the choice is deterministic but unspecified — do not rely on a
+ * specific tie-break.
  * @param {number} fromId
  * @param {number} toId
  * @param {Map<number, {room: object}>} idx index from buildIndex()
@@ -3057,35 +4806,9 @@ function findPath(fromId, toId, idx) {
   if (fromId === toId) return [fromId];
   const dist = new Map([[fromId, 0]]);
   const prev = new Map();
-  // binary heap of [cost, roomId]
   const heap = [[0, fromId]];
-  const push = (item) => {
-    heap.push(item);
-    let i = heap.length - 1;
-    while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (heap[p][0] <= heap[i][0]) break;
-      [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
-    }
-  };
-  const pop = () => {
-    const top = heap[0], last = heap.pop();
-    if (heap.length) {
-      heap[0] = last;
-      let i = 0;
-      for (;;) {
-        const l = 2 * i + 1, r = l + 1;
-        let m = i;
-        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-        if (m === i) break;
-        [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
-      }
-    }
-    return top;
-  };
   while (heap.length) {
-    const [d, id] = pop();
+    const [d, id] = _heapPop(heap);
     if (id === toId) {
       const path = [toId];
       let cur = toId;
@@ -3093,13 +4816,214 @@ function findPath(fromId, toId, idx) {
       return path.reverse();
     }
     if (d > (dist.get(id) ?? Infinity)) continue;
-    for (const [nid, w] of neighborsOf(idx.get(id).room)) {
+    for (const [nid, w] of neighborsOf(idx.get(id).room, idx)) {
       if (!idx.has(nid)) continue;
       const nd = d + w;
-      if (nd < (dist.get(nid) ?? Infinity)) { dist.set(nid, nd); prev.set(nid, id); push([nd, nid]); }
+      if (nd < (dist.get(nid) ?? Infinity)) { dist.set(nid, nd); prev.set(nid, id); _heapPush(heap, [nd, nid]); }
     }
   }
   return null;
+}
+
+/**
+ * Full router (reference-planner parity, stateless).
+ * opts:
+ *   algorithm     'dijkstra' | 'astar'      (default 'dijkstra'; forced to
+ *                                             Dijkstra when transports/extraEdges are active)
+ *   dirMode       'cardinal' | 'vertical' | 'all'   (default 'all')
+ *   transportMode 'off' | 'normal' | 'aggressive'   (default 'off')
+ *   avoidLocked   bool — skip locked rooms (default true); locked exits always skipped
+ *   isLocked      (room) => bool — room lock predicate (default: room.locked)
+ *   transports    arkmap-transports document (embedded map.transports or sidecar)
+ *   transportEdges  prebuilt edges from buildTransportEdges() (skips rebuild)
+ *   extraEdges    [{ from, to, cost, hop? }] — ad-hoc virtual edges for any map
+ * Returns { path: number[] | null, hops: (hop | null)[] } — hops aligned to
+ * path steps (null for walking steps); empty when path is null.
+ */
+function findRoute(fromId, toId, idx, opts) {
+  const o = opts || {};
+  const dirMode = o.dirMode || 'all';
+  const transportMode = o.transportMode || 'off';
+  const avoidLocked = o.avoidLocked !== false;
+  const isLocked = typeof o.isLocked === 'function' ? o.isLocked : (r) => !!r.locked;
+  if (!idx.has(fromId) || !idx.has(toId)) return { path: null, hops: [] };
+  if (fromId === toId) return { path: [fromId], hops: [] };
+
+  const { adj, areaMin } = _adjBuild(idx);
+
+  // virtual edges: transports (outside the dirMode filter) + ad-hoc extraEdges
+  let transportEdges = null;
+  if (transportMode !== 'off') {
+    transportEdges = o.transportEdges ||
+      (o.transports ? buildTransportEdges(o.transports, idx, { mode: transportMode }) : null);
+  }
+  const extra = new Map();
+  for (const e of o.extraEdges || []) {
+    if (!idx.has(e.from) || !idx.has(e.to)) continue;
+    if (typeof e.cost !== 'number' || !(e.cost >= 0)) continue;
+    if (!extra.has(e.from)) extra.set(e.from, []);
+    extra.get(e.from).push({ to: e.to, cost: e.cost, hop: e.hop ?? null });
+  }
+  const hasVirtual = !!(transportEdges || extra.size);
+  const algorithm = hasVirtual ? 'dijkstra' : (o.algorithm === 'astar' ? 'astar' : 'dijkstra');
+
+  const pathHops = new Map();   // target roomId -> hop of the entering step
+  const prev = new Map();
+
+  if (algorithm === 'astar') {
+    // A* — admissible + consistent heuristic:
+    //   h(n) = max(euclid(n)/maxEdgeDist*minEdgeW, areaGraphDist(area(n)))
+    const roomFrom = idx.get(fromId).room, roomTo = idx.get(toId).room;
+    const { maxEdgeDist, minEdgeW } = _astarParams(idx, adj);
+    const aFrom = idx.get(fromId).areaId, aTo = idx.get(toId).areaId;
+    let areaDist = null;
+    if (aFrom !== undefined && aTo !== undefined && aFrom !== aTo) {
+      areaDist = _areaDistances(areaMin, aTo);
+      if (!areaDist.has(aFrom)) return { path: null, hops: [] };   // disconnected area graph
+    }
+    const h = (rid, x, y, z) => {
+      const dx = x - roomTo.x, dy = y - roomTo.y, dz = z - (roomTo.z ?? 0);
+      let hh = Math.sqrt(dx * dx + dy * dy + dz * dz) / maxEdgeDist * minEdgeW;
+      if (areaDist) {
+        const a = idx.get(rid)?.areaId;
+        const ad = (a === aTo) ? 0 : (a === undefined ? undefined : areaDist.get(a));
+        if (ad !== undefined && ad > hh) hh = ad;
+      }
+      return hh;
+    };
+    const g = new Map([[fromId, 0]]);
+    const visited = new Set();
+    const heap = [[h(fromId, roomFrom.x, roomFrom.y, roomFrom.z ?? 0), fromId]];
+    while (heap.length) {
+      const [, cur] = _heapPop(heap);
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      const room = idx.get(cur)?.room;
+      if (!room) continue;
+      if (avoidLocked && isLocked(room) && cur !== fromId) continue;   // locked start may exit
+      if (cur === toId) break;
+      const gCur = g.get(cur) ?? Infinity;
+      const adjL = adj.get(+cur);
+      if (adjL) for (const e of adjL) {
+        if (visited.has(e.id)) continue;
+        if (e.lk) continue;                                    // locked exit — always skipped
+        if (!_dirAllowedCls(e.cls, dirMode)) continue;
+        const nbr = idx.get(e.id)?.room;
+        if (!nbr) continue;
+        if (avoidLocked && isLocked(nbr)) continue;
+        const newG = gCur + e.w;
+        if (newG < (g.get(e.id) ?? Infinity)) {
+          g.set(e.id, newG); prev.set(e.id, cur);
+          _heapPush(heap, [newG + h(e.id, e.x, e.y, e.z), e.id]);
+        }
+      }
+    }
+  } else {
+    // Dijkstra (walking + virtual edges)
+    const dist = new Map([[fromId, 0]]);
+    const visited = new Set();
+    const heap = [[0, fromId]];
+    while (heap.length) {
+      const [cost, cur] = _heapPop(heap);
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      const room = idx.get(cur)?.room;
+      if (!room) continue;
+      if (avoidLocked && isLocked(room) && cur !== fromId) continue;
+      if (cur === toId) break;
+      const adjL = adj.get(+cur);
+      if (adjL) for (const e of adjL) {
+        if (visited.has(e.id)) continue;
+        if (e.lk) continue;
+        if (!_dirAllowedCls(e.cls, dirMode)) continue;
+        const nbr = idx.get(e.id)?.room;
+        if (!nbr) continue;
+        if (avoidLocked && isLocked(nbr)) continue;
+        const nd = cost + e.w;
+        if (nd < (dist.get(e.id) ?? Infinity)) {
+          dist.set(e.id, nd); prev.set(e.id, cur);
+          pathHops.delete(e.id);   // better walking step replaces a hop
+          _heapPush(heap, [nd, e.id]);
+        }
+      }
+      if (transportEdges) {
+        const tEdges = transportEdges.get(cur);
+        if (tEdges) for (const te of tEdges) {
+          if (visited.has(te.to)) continue;
+          const tn = idx.get(te.to)?.room;
+          if (!tn) continue;
+          if (avoidLocked && isLocked(tn)) continue;
+          const nd = cost + te.cost;
+          if (nd < (dist.get(te.to) ?? Infinity)) {
+            dist.set(te.to, nd); prev.set(te.to, cur);
+            pathHops.set(te.to, te.hop);
+            _heapPush(heap, [nd, te.to]);
+          }
+        }
+      }
+      const xEdges = extra.get(cur);
+      if (xEdges) for (const xe of xEdges) {
+        if (visited.has(xe.to)) continue;
+        const tn = idx.get(xe.to)?.room;
+        if (!tn) continue;
+        if (avoidLocked && isLocked(tn)) continue;
+        const nd = cost + xe.cost;
+        if (nd < (dist.get(xe.to) ?? Infinity)) {
+          dist.set(xe.to, nd); prev.set(xe.to, cur);
+          if (xe.hop) pathHops.set(xe.to, xe.hop); else pathHops.delete(xe.to);
+          _heapPush(heap, [nd, xe.to]);
+        }
+      }
+    }
+  }
+
+  if (!prev.has(toId)) return { path: null, hops: [] };
+  const path = [toId];
+  let c = toId;
+  while (prev.has(c)) { c = prev.get(c); path.push(c); }
+  path.reverse();
+  const hops = new Array(path.length - 1).fill(null);
+  for (let i = 1; i < path.length; i++) {
+    const hp = pathHops.get(path[i]);
+    if (hp) hops[i - 1] = hp;
+  }
+  return { path, hops };
+}
+
+/**
+ * Multi-waypoint route (reference wpRecalcPaths parity, stateless).
+ * waypoints: array of (roomId | null); a leg is computed for every consecutive
+ * pair with both endpoints set; legs touching a null waypoint come back null.
+ * Returns { legs: ({ from, to, path, hops } | null)[], totalSteps, complete }.
+ * complete = every computed leg found a path.
+ */
+function planRoute(waypoints, idx, opts) {
+  const legs = [];
+  let totalSteps = 0, complete = true;
+  for (let i = 0; i + 1 < (waypoints || []).length; i++) {
+    const a = waypoints[i], b = waypoints[i + 1];
+    if (a == null || b == null) { legs.push(null); continue; }
+    const { path, hops } = findRoute(a, b, idx, opts);
+    if (!path) complete = false;
+    else totalSteps += path.length - 1;
+    legs.push({ from: a, to: b, path, hops });
+  }
+  return { legs, totalSteps, complete };
+}
+
+// Count steps that go through special exits (gates, portals) in a path.
+function countSpecialSteps(path, idx) {
+  if (!path || path.length < 2) return 0;
+  let count = 0;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const r = idx.get(path[i])?.room;
+    if (!r) continue;
+    const toId = +path[i + 1];
+    const inNormal = Object.values(r.exits || {}).some(v => +v === toId);
+    const inSpecial = Object.values(r.special_exits || {}).some(v => +v === toId);
+    if (inSpecial && !inNormal) count++;
+  }
+  return count;
 }
 
 /**
@@ -3130,12 +5054,18 @@ function searchRooms(query, mapObj, limit = 25) {
 }
 
 
+
 globalThis.arkmap = {
   loadArkmap, saveArkmap, createEmptyMap,
   datToArkmap, arkmapToDat, readMudletDat, writeMudletDat,
   validate, addChecksums, verifyChecksums, checkSuppressorsInMap,
   isArkadiaMap, stableStringify,
-  buildIndex, neighborsOf, findPath, searchRooms,
+  buildIndex, edgeWeight, neighborsOf,
+  findPath, findRoute, planRoute, countSpecialSteps, searchRooms,
+  validateTransports, normalizeTransports,
+  addTransportChecksums, verifyTransportChecksums, buildTransportEdges,
+  TRANSPORT_BOARDING_PENALTY, TRANSPORT_TIME_RATIO, TRANSPORT_DEFAULT_TIME,
+  TRANSPORTS_FORMAT, TRANSPORTS_VERSION, ARKADIA_TRANSPORTS,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

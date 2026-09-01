@@ -31,8 +31,21 @@ export {
   DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,
 } from './constants.js';
 
-// room graph: indexing, adjacency, Dijkstra pathfinding, room search
-export { buildIndex, neighborsOf, findPath, searchRooms } from './graph.js';
+// room graph: indexing, adjacency, routing (Dijkstra/A*, direction filters,
+// transports, locked exits), multi-waypoint planning, room search
+export {
+  buildIndex, edgeWeight, neighborsOf,
+  findPath, findRoute, planRoute, countSpecialSteps, searchRooms,
+} from './graph.js';
+
+// universal transport lines: schema validation, integrity (per-line sums),
+// routing-edge construction; tuple normalization for community data sources
+export {
+  TRANSPORT_BOARDING_PENALTY, TRANSPORT_TIME_RATIO, TRANSPORT_DEFAULT_TIME,
+  TRANSPORTS_FORMAT, TRANSPORTS_VERSION,
+  validateTransports, normalizeTransports,
+  addTransportChecksums, verifyTransportChecksums, buildTransportEdges,
+} from './transports.js';
 
 /** Checksum algorithm version implemented by this package ('v4' = XXH3-64 canonical). */
 export const CHECKSUM_ALG = 'v4';

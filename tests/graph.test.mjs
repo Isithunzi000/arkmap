@@ -58,14 +58,24 @@ test('neighborsOf: exits then special exits, weights applied', () => {
   assert.deepEqual(n.slice(3), [[5, 1], [1, 1]]);                  // special exits, default w=1
 });
 
-test('neighborsOf: invalid weights (negative, NaN, Infinity) fall back to 1', () => {
-  const room = { exits: { n: 2, s: 3, e: 4 }, exit_weights: { n: -5, s: NaN, e: Infinity } };
+test('neighborsOf: invalid weights (0, negative, NaN) count as unset (reference parity)', () => {
+  // reference: exit_weights[dir] only when > 0, else destination room weight (default 1)
+  const room = { exits: { n: 2, s: 3, w: 4 }, exit_weights: { n: -5, s: NaN, w: 0 } };
   assert.deepEqual(neighborsOf(room), [[2, 1], [3, 1], [4, 1]]);
 });
 
-test('neighborsOf: weight 0 is legal', () => {
-  const room = { exits: { n: 2 }, exit_weights: { n: 0 } };
-  assert.deepEqual(neighborsOf(room), [[2, 0]]);
+test('neighborsOf: Infinity weight passes through (effectively blocked edge, reference parity)', () => {
+  const room = { exits: { e: 4 }, exit_weights: { e: Infinity } };
+  assert.deepEqual(neighborsOf(room), [[4, Infinity]]);
+});
+
+test('neighborsOf: destination room weight is the default step cost (Mudlet semantics)', () => {
+  const room = { exits: { n: 2, s: 3 }, exit_weights: {} };
+  const idx = new Map([
+    [2, { room: { id: 2, weight: 5 }, areaId: 1, areaName: 'a' }],
+    [3, { room: { id: 3 }, areaId: 1, areaName: 'a' }],
+  ]);
+  assert.deepEqual(neighborsOf(room, idx), [[2, 5], [3, 1]]);
 });
 
 test('neighborsOf: room without exits yields empty list', () => {

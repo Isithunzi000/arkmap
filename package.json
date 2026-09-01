@@ -10,7 +10,9 @@
   "exports": {
     ".": "./src/index.js",
     "./arkadia": "./src/arkadia.js",
+    "./arkadia/transports": "./src/arkadia-transports.js",
     "./graph": "./src/graph.js",
+    "./transports": "./src/transports.js",
     "./package.json": "./package.json"
   },
   "files": [

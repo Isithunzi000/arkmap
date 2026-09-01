@@ -108,14 +108,24 @@ function roomsInScope() {
   return out;
 }
 
-function tri(cx, cy, dir) {   // dir: 'up' | 'down' | 'left' | 'right' — small triangle centered at (cx, cy)
-  const s = 0.16;
+function glyphColor(room) {   // kontrast do koloru pokoju (jak symbolFillFor/contrastColor w ArkMap Studio)
+  const m = envColor(room.env, map?.colors).match(/\d+/g);
+  if (!m) return '#14171c';
+  const lum = 0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2];
+  return lum > 140 ? '#14171c' : '#f2f5fa';
+}
+
+// Delwing-style triangles INSIDE the room (same geometry as ArkMap Studio: R = rs/5, 1.4 x 0.8, +/-rs/4)
+function innerTri(x, y, px, py, rot, R) {
   ctx.beginPath();
-  if (dir === 'up') { ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s, cy + s * 0.7); ctx.lineTo(cx - s, cy + s * 0.7); }
-  if (dir === 'down') { ctx.moveTo(cx, cy + s); ctx.lineTo(cx + s, cy - s * 0.7); ctx.lineTo(cx - s, cy - s * 0.7); }
-  if (dir === 'left') { ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s * 0.7, cy - s); ctx.lineTo(cx + s * 0.7, cy + s); }
-  if (dir === 'right') { ctx.moveTo(cx + s, cy); ctx.lineTo(cx - s * 0.7, cy - s); ctx.lineTo(cx - s * 0.7, cy + s); }
-  ctx.closePath(); ctx.fill();
+  for (let i = 0; i < 3; i++) {
+    const a = (2 * Math.PI * i / 3) - Math.PI / 2;
+    const qx = Math.cos(a) * R * 1.4, qy = Math.sin(a) * R * 0.8;
+    const vx = px + qx * Math.cos(rot) - qy * Math.sin(rot);
+    const vy = py + qx * Math.sin(rot) + qy * Math.cos(rot);
+    i === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 
 function draw() {
@@ -180,11 +190,22 @@ function draw() {
     ctx.strokeRect(x - rs, y - rs, rs * 2, rs * 2);
 
     const ex = room.exits || {};
-    ctx.fillStyle = '#aab2c0';
-    if (ex.up !== undefined) tri(x, y - rs - 0.18, 'up');
-    if (ex.down !== undefined) tri(x, y + rs + 0.18, 'down');
-    if (ex.in !== undefined) tri(x - rs - 0.18, y, 'left');
-    if (ex.out !== undefined) tri(x + rs + 0.18, y, 'right');
+    const R = rs / 5;
+    const gcol = glyphColor(room);
+    const polys = {
+      up:   [[x, y + rs / 4, 0]],
+      down: [[x, y - rs / 4, Math.PI]],
+      in:   [[x - rs / 4, y, Math.PI / 2], [x + rs / 4, y, -Math.PI / 2]],
+      out:  [[x - rs / 4, y, -Math.PI / 2], [x + rs / 4, y, Math.PI / 2]],
+    };
+    for (const dir of ['up', 'down', 'in', 'out']) {
+      if (ex[dir] === undefined) continue;
+      const door = (room.doors || {})[dir];
+      ctx.fillStyle = gcol;
+      ctx.strokeStyle = door ? '#fbbf24' : gcol;
+      ctx.lineWidth = 0.05;
+      for (const [px, py, rot] of polys[dir]) innerTri(x, y, px, py, rot, R);
+    }
 
     if (showSymbols && room.symbol) {
       const fs = rs * 1.15;
@@ -194,6 +215,13 @@ function draw() {
       ctx.strokeText(room.symbol, x, y);
       ctx.fillStyle = '#f2f5fa';
       ctx.fillText(room.symbol, x, y);
+    }
+    // special-exit marker (jak w ArkMap Studio)
+    if (showSymbols && room.special_exits && Object.keys(room.special_exits).length) {
+      ctx.font = `bold ${rs * 0.9}px monospace`;
+      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillStyle = gcol;
+      ctx.fillText('✦', x + rs * 0.95, y - rs * 0.95);
     }
   }
   ctx.restore();
@@ -213,7 +241,8 @@ function fit() {
 
 function populateSelectors() {
   const areas = (map.areas || []).filter(a => (a.rooms || []).length > 0);
-  areas.sort((a, b) => b.rooms.length - a.rooms.length);
+  const largest = areas.reduce((m, a) => (a.rooms.length > (m?.rooms.length || 0) ? a : m), null);
+  areas.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pl'));   // alfabetycznie, jak OBSZARY w ArkMap Studio
   const total = areas.reduce((s, a) => s + a.rooms.length, 0);
   selArea.innerHTML = '';
   const all = document.createElement('option');
@@ -225,7 +254,7 @@ function populateSelectors() {
     o.textContent = `${a.name || 'area ' + a.id} — ${a.rooms.length} rooms`;
     selArea.appendChild(o);
   }
-  scope.areaId = areas.length ? areas[0].id : 'all';   // default: largest area
+  scope.areaId = largest ? largest.id : 'all';   // default view: largest area
   selArea.value = String(scope.areaId);
   populateZ();
   selArea.hidden = selZ.hidden = false;
@@ -274,14 +303,34 @@ function afterLoad(msg, cls) {
   fit(); draw();
 }
 
+// ===CHECKSUM-STATUS-BEGIN===
+// Szczegolowy status integralnosci: co jest zepsute i gdzie (pokoj/area/meta/alg).
+// Semantyka pol verifyChecksums: badRooms/badAreas = tresc zmieniona; missing* = obiekt
+// w pliku BEZ sumy (dodany); extra* = suma-sierota (obiekt usuniety); metaOk poza ok (D2).
+function checksumStatus(fileName, rooms, cs) {
+  if (!cs.present) return [`${fileName} — ${rooms} rooms — no checksums in file`, 'warn'];
+  if (cs.algMismatch) return [`${fileName} — checksum algorithm mismatch: file has '${cs.algMismatch}', this viewer supports 'v4' (possible downgrade attempt)`, 'err'];
+  if (cs.verifyError) return [`${fileName} — checksum verification failed: corrupt data (see validation)`, 'err'];
+  const probs = [];
+  if (cs.badRooms?.length) probs.push(`${cs.badRooms.length} room(s) modified (first: room #${cs.badRooms[0].roomId} in area "${cs.badRooms[0].areaName}")`);
+  if (cs.badAreas?.length) probs.push(`${cs.badAreas.length} area(s) modified (first: #${cs.badAreas[0].id} "${cs.badAreas[0].name}")`);
+  if (cs.missingRooms?.length) probs.push(`${cs.missingRooms.length} room(s) without checksum (added, unsigned)`);
+  if (cs.extraRooms?.length) probs.push(`${cs.extraRooms.length} orphaned room checksum(s) (rooms removed)`);
+  if (cs.missingAreas?.length) probs.push(`${cs.missingAreas.length} area(s) without checksum (added, unsigned)`);
+  if (cs.extraAreas?.length) probs.push(`${cs.extraAreas.length} orphaned area checksum(s) (areas removed)`);
+  if (cs.fileOk === false && !probs.length) probs.push('whole-file hash mismatch');
+  if (!cs.ok) return [`${fileName} — ${rooms} rooms — CHECKSUM MISMATCH: ${probs.join('; ')}`, 'err'];
+  if (cs.metaOk === false) return [`${fileName} — ${rooms} rooms — data checksums OK, but META checksum mismatch (map metadata modified)`, 'warn'];
+  return [`${fileName} — ${rooms} rooms — checksums OK [v4]`, 'ok'];
+}
+// ===CHECKSUM-STATUS-END===
+
 function loadArkmapText(fileName, text) {
   const { map: m, validation, checksums } = A.loadArkmap(text);
   map = m;
   const rooms = (m.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
   if (!validation.ok) afterLoad(`${fileName} — ${validation.errors.length} validation error(s), first: ${validation.errors[0].path} ${validation.errors[0].msg}`, 'err');
-  else if (checksums.present && !checksums.ok) afterLoad(`${fileName} — ${rooms} rooms — CHECKSUM MISMATCH`, 'err');
-  else if (checksums.present) afterLoad(`${fileName} — ${rooms} rooms — checksums OK [v4]`, 'ok');
-  else afterLoad(`${fileName} — ${rooms} rooms — no checksums in file`, 'warn');
+  else afterLoad(...checksumStatus(fileName, rooms, checksums));
 }
 
 function loadDatBuffer(fileName, buf) {

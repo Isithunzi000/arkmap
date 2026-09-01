@@ -294,39 +294,58 @@ function drawMapLabels(top) {
   }
 }
 
-// etykiety strzalek cross-area 1:1 jak drawCrossAreaLabels w ArkMap Studio:
-// staly rozmiar w px ekranu (nie skaluje sie z zoomem), smart placement —
-// 3 pozycje kandydujace (prostopadle +/-, potem wzdluz), pierwsza bez kolizji
-// z pokojami; boks z tlem i obrysowka, wpinany w viewport z marginesem 2px.
-// Próg: Studio zoom >= 0.5 przy CELL=18 <=> pokoj 9px <=> view.scale >= 12.5.
-function drawCrossArrowLabels() {
-  if (!map || !_lastCrossArrows.length || view.scale < 12.5) return;
+// strzalki + etykiety cross-area 1:1 jak ArkMap Studio (drawCrossAreaArrows +
+// drawCrossAreaLabels): rysowane w pikselach ekranu (po restore), nie w jednostkach
+// mapy — linia max(1, roomPx/18) px, dlugosc max(4, roomPx*0.9) px, grot 0.35 pokoju;
+// strzalki ukryte ponizej pokoju 4.5px (Studio minZoom 0.25), etykiety ponizej 9px
+// (Studio 0.5). Etykieta: staly font 8-11px, smart placement (3 pozycje, pierwsza
+// bez kolizji z pokojami), boks z tlem, wpiecie w viewport z marginesem 2px.
+function drawCrossArrowOverlay() {
+  if (!map || !_lastCrossArrows.length) return;
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
-  const roomPx = 0.72 * view.scale;                       // CELL*zoom w Studio
-  const fontSize = Math.max(8, Math.min(11, roomPx * 8 / 18));
+  const roomPx = 0.72 * view.scale;                        // CELL*zoom w Studio (CELL=18)
+  if (roomPx < 4.5) return;                                // Studio: strzalki chowaja sie przy duzym oddaleniu
+  const toSX = (mx) => W / 2 + view.x + mx * view.scale;
+  const toSY = (my) => H / 2 + view.y + my * view.scale;   // my juz w ukladzie ekranu
+  const tickLen = Math.max(4, roomPx * 0.9);
+  const lineW = Math.max(1, roomPx / 18);
   const hw = Math.max(1.5, roomPx * 0.35);
+  const vis = roomsInScope();
+  for (const a of _lastCrossArrows) {
+    if (a.targetId == null) continue;
+    const ex = toSX(a.x1), ey = toSY(a.y1);
+    const ax = ex + a.ux * tickLen, ay = ey + a.uy * tickLen;
+    const col = envColor(a.env, map?.colors);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lineW;
+    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ax, ay); ctx.stroke();
+    const pxv = -a.uy, pyv = a.ux;
+    ctx.beginPath();
+    ctx.moveTo(ax + a.ux * hw * 1.2, ay + a.uy * hw * 1.2);
+    ctx.lineTo(ax - a.ux * hw + pxv * hw * 0.8, ay - a.uy * hw + pyv * hw * 0.8);
+    ctx.lineTo(ax - a.ux * hw - pxv * hw * 0.8, ay - a.uy * hw - pyv * hw * 0.8);
+    ctx.closePath(); ctx.fill();
+    a.smx = (ex + ax) / 2; a.smy = (ey + ay) / 2;          // hit-test dblclick (px ekranu)
+    a.hitR = Math.max(15, tickLen * 1.5);
+    a.stx = ax; a.sty = ay;                                // kotwica etykiety
+  }
+  if (roomPx < 9) return;                                  // Studio: etykiety od zoomu 0.5
+  const fontSize = Math.max(8, Math.min(11, roomPx * 8 / 18));
   const alongOff = hw * 2.0 + 6;
   const perpOff = Math.max(roomPx * 1.2, 14);
   const rh = roomPx * 0.55;
-  const toSX = (mx) => W / 2 + view.x + mx * view.scale;
-  const toSY = (my) => H / 2 + view.y + my * view.scale;   // my juz w ukladzie ekranu
-  const vis = roomsInScope();
   ctx.font = `${fontSize}px sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   for (const a of _lastCrossArrows) {
-    if (a.targetId == null || !a.areaName) continue;
+    if (a.targetId == null || !a.areaName || a.stx === undefined) continue;
     const labelStr = a.areaName;
-    const ax = toSX(a.x2), ay = toSY(a.y2);                // czubek strzalki
-    let vx = toSX(a.x1) - ax, vy = toSY(a.y1) - ay;         // wektor w strone pokoju -> odwrotnie
-    const vl = Math.hypot(vx, vy) || 1;
-    vx = -vx / vl; vy = -vy / vl;                          // jednostkowy, od pokoju do czubka
+    const vx = a.ux, vy = a.uy;
     const tm = ctx.measureText(labelStr);
     const tw = tm.width + 6, th = fontSize + 4;
     const pxv = -vy, pyv = vx;
     const candidates = [
-      [ax + vx * alongOff + pxv * perpOff, ay + vy * alongOff + pyv * perpOff],
-      [ax + vx * alongOff - pxv * perpOff, ay + vy * alongOff - pyv * perpOff],
-      [ax + vx * (perpOff * 2.5 + alongOff), ay + vy * (perpOff * 2.5 + alongOff)],
+      [a.stx + vx * alongOff + pxv * perpOff, a.sty + vy * alongOff + pyv * perpOff],
+      [a.stx + vx * alongOff - pxv * perpOff, a.sty + vy * alongOff - pyv * perpOff],
+      [a.stx + vx * (perpOff * 2.5 + alongOff), a.sty + vy * (perpOff * 2.5 + alongOff)],
     ];
     let bestIdx = candidates.length - 1;                   // fallback: ostatnia (jak w Studio)
     for (let ci = 0; ci < candidates.length; ci++) {
@@ -382,9 +401,9 @@ function draw() {
   // etykiety mapy pod pokojami (show_on_top rysowane pozniej, nad pokojami)
   drawMapLabels(false);
 
-  // exits: full lines inside the scope, arrows for known rooms in ANOTHER area
-  // (cross-area, jak w ArkMap Studio — ten sam obszar na innym poziomie = zwykly stub),
-  // short gray stubs for unknown targets
+  // exits: full lines inside the scope, short gray stubs for connections leaving it;
+  // wyjscia cross-area (inny obszar) zbieramy — strzalki rysuje drawCrossArrowOverlay()
+  // PO restore, w pikselach ekranu, 1:1 jak ArkMap Studio
   ctx.lineWidth = 0.14; ctx.strokeStyle = '#565e6b';
   const crossArrows = [];
   for (const room of vis) {
@@ -409,25 +428,15 @@ function draw() {
       crossArrows.push({ room, sv, tgt, env: t.room.env, areaName: t.areaName });
     }
   }
-  // strzalki cross-area: linia od krawedzi pokoju + grot, kolor env celu;
-  // etykiety nazw obszarow rysuje drawCrossArrowLabels() PO restore (px ekranu, 1:1 jak Studio)
+  // geometria strzalki: krawedz pokoju (przeciecie promienia z kwadratem) + wektor jednostkowy
   for (const a of crossArrows) {
     const len = Math.hypot(a.sv[0], a.sv[1]);
     if (!len) continue;
     const ux = a.sv[0] / len, uy = a.sv[1] / len;
-    const tEdge = 0.36 / Math.max(Math.abs(ux), Math.abs(uy));   // przeciecie promienia z kwadratem pokoju
-    const ex = a.room.x + ux * tEdge, ey = -a.room.y + uy * tEdge;
-    const tx = ex + ux * 0.45, ty = ey + uy * 0.45;
-    const col = envColor(a.env, map?.colors);
-    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 0.14;
-    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
-    const hl = 0.22, hw = 0.12, bx = tx - ux * hl, by = ty - uy * hl, pxv = -uy, pyv = ux;
-    ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(bx + pxv * hw, by + pyv * hw);
-    ctx.lineTo(bx - pxv * hw, by - pyv * hw);
-    ctx.closePath(); ctx.fill();
-    a.x1 = ex; a.y1 = ey; a.x2 = tx; a.y2 = ty; a.targetId = a.tgt;   // hit-test dblclick
+    const tEdge = 0.36 / Math.max(Math.abs(ux), Math.abs(uy));
+    a.ux = ux; a.uy = uy;
+    a.x1 = a.room.x + ux * tEdge; a.y1 = -a.room.y + uy * tEdge;
+    a.targetId = a.tgt;
   }
   _lastCrossArrows = crossArrows;
   globalThis.__arkmapCrossArrows = crossArrows;   // hak smoke-harnessa
@@ -543,7 +552,7 @@ function draw() {
   }
   ctx.restore();
 
-  drawCrossArrowLabels();   // px ekranu, po restore — 1:1 jak warstwa etykiet strzalek w Studio
+  drawCrossArrowOverlay();   // strzalki + etykiety w px ekranu, po restore — 1:1 jak Studio
 
   drawMinimap();
   drawRouteOv();
@@ -665,23 +674,18 @@ cv.addEventListener('pointerup', e => {
 // dblclick: skok za strzalka cross-area do obszaru/pokoju docelowego
 // (jak w ArkMap Studio; fallback: pokoj z dokladnie jednym wyjsciem cross-area,
 // przy kilku — kierunek najblizszy kliknieciu)
-function distToSeg(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
-  if (!l2) return Math.hypot(px - x1, py - y1);
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l2));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
-}
 cv.addEventListener('dblclick', e => {
   if (!map) return;
   const rect = cv.getBoundingClientRect();
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
-  const wx = (e.clientX - rect.left - W / 2 - view.x) / view.scale;
-  const wy = (e.clientY - rect.top - H / 2 - view.y) / view.scale;
-  let best = null, bestD = 0.4;
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;   // px ekranu (jak Studio)
+  const wx = (sx - W / 2 - view.x) / view.scale;
+  const wy = (sy - H / 2 - view.y) / view.scale;
+  let best = null, bestD = Infinity;
   for (const a of _lastCrossArrows) {
-    if (a.targetId == null) continue;
-    const d = distToSeg(wx, wy, a.x1, a.y1, a.x2, a.y2);
-    if (d < bestD) { bestD = d; best = a; }
+    if (a.targetId == null || a.smx === undefined) continue;
+    const d = Math.hypot(sx - a.smx, sy - a.smy);
+    if (d < (a.hitR || 15) && d < bestD) { bestD = d; best = a; }
   }
   if (best) { jumpToRoom(best.targetId); return; }
   let near = null, nearD = 0.6;

@@ -69,11 +69,12 @@ function _renderArrow(sx, sy, sv, color, title) {
   const ux = sv[0] / len, uy = sv[1] / len;
   const tEdge = RENDER_ROOM_R / Math.max(Math.abs(ux), Math.abs(uy));   // ray-square intersection: cardinals edge-mid, diagonals corner
   const ex = sx + ux * tEdge, ey = sy + uy * tEdge;
-  const tx = ex + ux * 0.45, ty = ey + uy * 0.45;                         // tip
-  const hl = 0.22, hw = 0.12;
-  const bx = tx - ux * hl, by = ty - uy * hl;
+  const tx = ex + ux * 0.65, ty = ey + uy * 0.65;                         // tip — Studio: 0.9 room widths
+  const hw = 0.25;                                                        // head half-length — Studio: 0.35 room widths
   const px = -uy, py = ux;
-  const points = `${_renderFmt(tx)},${_renderFmt(ty)} ${_renderFmt(bx + px * hw)},${_renderFmt(by + py * hw)} ${_renderFmt(bx - px * hw)},${_renderFmt(by - py * hw)}`;
+  const points = `${_renderFmt(tx + ux * hw * 1.2)},${_renderFmt(ty + uy * hw * 1.2)}`
+    + ` ${_renderFmt(tx - ux * hw + px * hw * 0.8)},${_renderFmt(ty - uy * hw + py * hw * 0.8)}`
+    + ` ${_renderFmt(tx - ux * hw - px * hw * 0.8)},${_renderFmt(ty - uy * hw - py * hw * 0.8)}`;
   return `<g stroke="${color}" fill="${color}"><title>${_renderEsc(title)}</title>`
     + `<line x1="${_renderFmt(ex)}" y1="${_renderFmt(ey)}" x2="${_renderFmt(tx)}" y2="${_renderFmt(ty)}" stroke-width="0.14"/>`
     + `<polygon points="${points}" stroke="none"/></g>`;

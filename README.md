@@ -243,14 +243,16 @@ if (d && !d.error) console.log(d.valid, d.algorithm, d.dirMode, d.transportMode)
 
 #### Map diff
 
-`diffMaps(srcMap, dstMap)` compares two maps and returns a topologically
-ordered list of arkdelta-style ops — the same vocabulary ArkMap Studio's
-editor produces (`ADD_AREA`, `EDIT_AREA`, `EDIT_ENV_COLOR`, `ADD_ROOM`,
-`MOVE_ROOM_TO_AREA`, `DELETE_ROOM`, `MOVE_ROOM`, `EDIT_ROOM`, `DELETE_EXIT` /
-`ADD_EXIT`, `EDIT_EXIT`, `PAINT_BATCH`, `ADD_CL` / `EDIT_CL` / `DELETE_CL`,
-`ADD_LABEL` / `EDIT_LABEL` / `MOVE_LABEL` / `RESIZE_LABEL` / `DELETE_LABEL`,
-`DELETE_AREA`). Universal — works on any arkmap-shaped maps, any MUD.
-Available from the root and under the `arkmap/diff` subpath.
+`diffMaps(srcMap, dstMap)` compares two maps and returns a list of **edit
+operations** that turn the first map into the second: *what* changed
+(`ADD_ROOM`, `DELETE_EXIT`, `EDIT_LABEL`, `PAINT_BATCH`, … — 20 op types
+covering areas, rooms, exits, moves, env colors, custom lines and labels),
+*where* (room/area ids), and the *before/after* state where reverting matters.
+The list is **topologically ordered**, so applying the ops top to bottom never
+breaks references (e.g. rooms are added before exits can point at them, areas
+are deleted last). Each op carries a human-readable `label` (Polish, same as
+ArkMap Studio's history panel). Universal — works on any arkmap-shaped maps,
+any MUD. Available from the root and under the `arkmap/diff` subpath.
 
 ```js
 import { diffMaps } from 'arkmap/diff';

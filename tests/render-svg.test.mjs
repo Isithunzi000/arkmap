@@ -26,8 +26,9 @@ test('structure: svg header, background, deduped exits, room rects', () => {
   assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="/);
   assert.ok(svg.endsWith('</svg>'));
   assert.equal((svg.match(/<rect /g) || []).length, 3);   // background + 2 rooms
-  assert.equal((svg.match(/<line /g) || []).length, 2);   // 1<->2 dedup + arrow line n->3 (known room out of z scope)
+  assert.equal((svg.match(/<line /g) || []).length, 2);   // 1<->2 dedup + stub n->3 (same area, other level — Studio parity: no arrow)
   assert.ok(svg.includes('<g stroke="#565e6b" stroke-width="0.14">'), 'exit group present');
+  assert.ok(!svg.includes('<polygon'), 'no arrow for same-area cross-level exit');
 });
 
 test('exit dedup: shared edge emitted exactly once', () => {

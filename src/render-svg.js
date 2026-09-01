@@ -160,6 +160,7 @@ function renderSvg(mapObj, opts) {
   const arrows = [];
   for (const r of rooms) {
     const [sx, sy] = pos.get(r.id);
+    const srcArea = allRooms.get(r.id)?.areaId;
     for (const [dir, tgt] of Object.entries(r.exits || {})) {
       const t = pos.get(tgt);
       if (t) {
@@ -171,7 +172,8 @@ function renderSvg(mapObj, opts) {
         const d = _RENDER_DELTA[dir];
         if (!d) continue;   // up/down/in/out have no line geometry
         const known = allRooms.get(tgt);
-        if (known) {
+        if (known && known.areaId !== srcArea) {
+          // cross-area only (ArkMap Studio parity: same area on another level = stub)
           const name = areaNames.get(known.areaId) || `area ${known.areaId}`;
           arrows.push(_renderArrow(sx, sy, [d[0], -d[1]], _renderEnvColor(known.room.env, mapObj), `${name} (#${tgt})`));
         } else {
@@ -179,11 +181,11 @@ function renderSvg(mapObj, opts) {
         }
       }
     }
-    // special exits to known rooms outside the scope: arrow toward the target
+    // special exits to known rooms in ANOTHER area: arrow toward the target
     for (const [, tgt] of Object.entries(r.special_exits || {})) {
       if (pos.has(tgt)) continue;
       const known = allRooms.get(tgt);
-      if (!known) continue;
+      if (!known || known.areaId === srcArea) continue;
       const sv = [known.room.x - r.x, -(known.room.y - r.y)];
       if (!sv[0] && !sv[1]) continue;
       const name = areaNames.get(known.areaId) || `area ${known.areaId}`;

@@ -294,6 +294,67 @@ function drawMapLabels(top) {
   }
 }
 
+// etykiety strzalek cross-area 1:1 jak drawCrossAreaLabels w ArkMap Studio:
+// staly rozmiar w px ekranu (nie skaluje sie z zoomem), smart placement —
+// 3 pozycje kandydujace (prostopadle +/-, potem wzdluz), pierwsza bez kolizji
+// z pokojami; boks z tlem i obrysowka, wpinany w viewport z marginesem 2px.
+// Próg: Studio zoom >= 0.5 przy CELL=18 <=> pokoj 9px <=> view.scale >= 12.5.
+function drawCrossArrowLabels() {
+  if (!map || !_lastCrossArrows.length || view.scale < 12.5) return;
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  const roomPx = 0.72 * view.scale;                       // CELL*zoom w Studio
+  const fontSize = Math.max(8, Math.min(11, roomPx * 8 / 18));
+  const hw = Math.max(1.5, roomPx * 0.35);
+  const alongOff = hw * 2.0 + 6;
+  const perpOff = Math.max(roomPx * 1.2, 14);
+  const rh = roomPx * 0.55;
+  const toSX = (mx) => W / 2 + view.x + mx * view.scale;
+  const toSY = (my) => H / 2 + view.y + my * view.scale;   // my juz w ukladzie ekranu
+  const vis = roomsInScope();
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (const a of _lastCrossArrows) {
+    if (a.targetId == null || !a.areaName) continue;
+    const labelStr = a.areaName;
+    const ax = toSX(a.x2), ay = toSY(a.y2);                // czubek strzalki
+    let vx = toSX(a.x1) - ax, vy = toSY(a.y1) - ay;         // wektor w strone pokoju -> odwrotnie
+    const vl = Math.hypot(vx, vy) || 1;
+    vx = -vx / vl; vy = -vy / vl;                          // jednostkowy, od pokoju do czubka
+    const tm = ctx.measureText(labelStr);
+    const tw = tm.width + 6, th = fontSize + 4;
+    const pxv = -vy, pyv = vx;
+    const candidates = [
+      [ax + vx * alongOff + pxv * perpOff, ay + vy * alongOff + pyv * perpOff],
+      [ax + vx * alongOff - pxv * perpOff, ay + vy * alongOff - pyv * perpOff],
+      [ax + vx * (perpOff * 2.5 + alongOff), ay + vy * (perpOff * 2.5 + alongOff)],
+    ];
+    let bestIdx = candidates.length - 1;                   // fallback: ostatnia (jak w Studio)
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const tbx = candidates[ci][0] - 2, tby = candidates[ci][1] - th / 2;
+      let collision = false;
+      for (const r of vis) {
+        const rx = toSX(r.x), ry = toSY(-r.y);
+        if (tbx + tw > rx - rh && tbx < rx + rh && tby + th > ry - rh && tby < ry + rh) { collision = true; break; }
+      }
+      if (!collision) { bestIdx = ci; break; }
+    }
+    let lx = candidates[bestIdx][0], ly = candidates[bestIdx][1];
+    let bx = lx - 2, by = ly - th / 2;
+    const margin = 2;
+    if (bx < margin) { const d = margin - bx; bx += d; lx += d; }
+    if (by < margin) { const d = margin - by; by += d; ly += d; }
+    if (bx + tw > W - margin) { const d = (bx + tw) - (W - margin); bx -= d; lx -= d; }
+    if (by + th > H - margin) { const d = (by + th) - (H - margin); by -= d; ly -= d; }
+    ctx.fillStyle = 'rgba(10,12,18,0.82)';
+    ctx.fillRect(bx, by, tw, th);
+    ctx.strokeStyle = 'rgba(255,159,74,0.35)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(bx, by, tw, th);
+    ctx.fillStyle = '#ffb86c';
+    ctx.fillText(labelStr, lx, ly);
+  }
+}
+
 function draw() {
   zoomPct.textContent = Math.round(view.scale / (lastFitScale || view.scale) * 100) + '%';
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
@@ -321,34 +382,35 @@ function draw() {
   // etykiety mapy pod pokojami (show_on_top rysowane pozniej, nad pokojami)
   drawMapLabels(false);
 
-  // exits: full lines inside the scope, arrows for known rooms outside it
-  // (cross-area/cross-level, jak w ArkMap Studio), short gray stubs for unknown targets
+  // exits: full lines inside the scope, arrows for known rooms in ANOTHER area
+  // (cross-area, jak w ArkMap Studio — ten sam obszar na innym poziomie = zwykly stub),
+  // short gray stubs for unknown targets
   ctx.lineWidth = 0.14; ctx.strokeStyle = '#565e6b';
   const crossArrows = [];
   for (const room of vis) {
+    const srcArea = roomIdx.get(room.id)?.areaId;
     for (const [dir, tgt] of Object.entries(room.exits || {})) {
       const d = DELTA[dir];
       const t = roomIdx.get(tgt);
       if (t && visIds.has(t.room.id)) {
         ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.room.x, -t.room.y); ctx.stroke();
-      } else if (t && d) {
+      } else if (t && d && t.areaId !== srcArea) {
         crossArrows.push({ room, sv: [d[0], -d[1]], tgt, env: t.room.env, areaName: t.areaName });
       } else if (d) {
         ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(room.x + d[0] * 0.45, -(room.y + d[1] * 0.45)); ctx.stroke();
       }
     }
-    // special exits do znanych pokoi poza zakresem: strzalka w strone celu
+    // special exits do znanych pokoi w INNYM obszarze: strzalka w strone celu
     for (const [, tgt] of Object.entries(room.special_exits || {})) {
       const t = roomIdx.get(tgt);
-      if (!t || visIds.has(t.room.id)) continue;
+      if (!t || visIds.has(t.room.id) || t.areaId === srcArea) continue;
       const sv = [t.room.x - room.x, -(t.room.y - room.y)];
       if (!sv[0] && !sv[1]) continue;
       crossArrows.push({ room, sv, tgt, env: t.room.env, areaName: t.areaName });
     }
   }
-  // strzalki cross-area: linia od krawedzi pokoju + grot, kolor env celu,
-  // etykieta z nazwa obszaru docelowego od progu czytelnego zoomu
-  const showCrossLbl = view.scale >= 12;
+  // strzalki cross-area: linia od krawedzi pokoju + grot, kolor env celu;
+  // etykiety nazw obszarow rysuje drawCrossArrowLabels() PO restore (px ekranu, 1:1 jak Studio)
   for (const a of crossArrows) {
     const len = Math.hypot(a.sv[0], a.sv[1]);
     if (!len) continue;
@@ -366,14 +428,6 @@ function draw() {
     ctx.lineTo(bx - pxv * hw, by - pyv * hw);
     ctx.closePath(); ctx.fill();
     a.x1 = ex; a.y1 = ey; a.x2 = tx; a.y2 = ty; a.targetId = a.tgt;   // hit-test dblclick
-    if (showCrossLbl && a.areaName) {
-      const lx = tx + ux * 0.45, ly = ty + uy * 0.45;
-      ctx.font = '0.5px system-ui, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 0.06; ctx.strokeStyle = 'rgba(20,23,28,0.9)';
-      ctx.strokeText(a.areaName, lx, ly);
-      ctx.fillStyle = '#dde3ea'; ctx.fillText(a.areaName, lx, ly);
-    }
   }
   _lastCrossArrows = crossArrows;
   globalThis.__arkmapCrossArrows = crossArrows;   // hak smoke-harnessa
@@ -488,6 +542,8 @@ function draw() {
     }
   }
   ctx.restore();
+
+  drawCrossArrowLabels();   // px ekranu, po restore — 1:1 jak warstwa etykiet strzalek w Studio
 
   drawMinimap();
   drawRouteOv();

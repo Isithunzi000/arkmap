@@ -12,7 +12,6 @@
   header h1 { font-size: 16px; margin: 0; font-weight: 600; padding-top: 5px; }
   header h1 span { color: #6f7684; font-weight: 400; }
   .btn { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
-  .btn-fit { padding: 3px 6px; width: 48px; white-space: normal; line-height: 1.15; text-align: center; }
   .btn.mini { padding: 5px 9px; }
   .btn.armed { box-shadow: 0 0 0 1px #4ade80; }
   .rf { position: relative; display: inline-flex; }
@@ -82,7 +81,6 @@
 <header>
   <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
-  <button class="btn btn-fit" id="btnFit" hidden>Fit to window</button>
   <button class="btn mini" id="expSvg" hidden title="export current area/level as a vector SVG (with route overlay)">SVG</button>
   <button class="btn mini" id="expPng" hidden title="export current area/level as PNG, 2x (with route overlay)">PNG</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
@@ -888,16 +886,6 @@ document.addEventListener('click', (e) => {
   if (e.target !== cv && !routeBox.contains(e.target)) disarm();   // klik w canvas NIE odzbraja — czeka na wybor pokoju
 });
 
-document.getElementById('btnFit').onclick = () => { fit(); draw(); };
-// autofit: zmniejszaj font, az "Fit to window" (3 linie) zmiesci sie w malym przycisku
-(function autofitFitBtn() {
-  const b = document.getElementById('btnFit');
-  let fs = 11;
-  b.style.fontSize = fs + 'px';
-  while (fs > 6 && (b.scrollWidth > b.clientWidth || b.scrollHeight > b.clientHeight)) {
-    fs -= 0.5; b.style.fontSize = fs + 'px';
-  }
-})();
 // zoom kolkiem — do punktu pod kursorem (swiat pod kursorem zostaje w miejscu,
 // mapa nie "ucieka"); clamps zgodne z fit (0.05..60)
 cv.addEventListener('wheel', e => {
@@ -1104,7 +1092,6 @@ function afterLoad(msg, cls) {
   emptyEl.style.display = 'none';
   setStatus(msg, cls);
   populateSelectors();
-  document.getElementById('btnFit').hidden = false;
   document.getElementById('expSvg').hidden = false;
   document.getElementById('expPng').hidden = false;
   document.getElementById('searchBox').hidden = false;

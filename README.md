@@ -29,6 +29,27 @@ const datBytes   = arkmapToDat(map);           // arkmap map object -> .dat Uint
 const text = saveArkmap(map);
 ```
 
+## Demo viewer
+
+**Try it now, no install: [isithunzi000.github.io/arkmap](https://isithunzi000.github.io/arkmap/)**
+— a zero-build viewer that runs entirely on this package, in your browser.
+
+Drag & drop a `.dat` / `.arkmap` file (or pass `?src=<url>`) and you get:
+
+- the map fitted to the window on open, with per-area / per-level navigation,
+  a geographic minimap (click/drag pan) and a zoom bar with cursor-anchored
+  wheel zoom and a live zoom ratio,
+- validation and checksum status — including per-line transport integrity,
+- room search with jump & highlight and a room info panel,
+- multi-waypoint route planning on `arkmap/graph` (Dijkstra/A*, direction
+  filters, transport modes) with a schematic route overview, fit-route and
+  gen-3 `arkmap:` route codes (live export / paste import) via
+  `arkmap/waypoints`,
+- true-vector SVG / PNG export of the current view via `arkmap/render-svg`.
+
+The viewer's source is a single hand-written `docs/index.html` — a practical
+example of building a full map app on the package with zero dependencies.
+
 ## The .arkmap format
 
 `.arkmap` is our own JSON map format for MUD games (introduced by ArkMap
@@ -337,18 +358,6 @@ const svg = renderSvg(map, {
 });
 const pngBlob = await svgToPng(svg, { scale: 2 }); // browser only
 ```
-
-### Demo viewer
-
-A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and
-per-level navigation, validation and checksum status — including per-line
-transport integrity, fit-to-window button, room search with jump & highlight
-and a room info panel, geographic minimap with click/drag pan, schematic
-route overview, multi-waypoint route planning with gen-3 `arkmap:` route
-codes (live export / paste import) on top of `arkmap/graph` +
-`arkmap/waypoints`, and vector SVG / PNG export of the current view via
-`arkmap/render-svg`) lives in `docs/` and on
-[GitHub Pages](https://isithunzi000.github.io/arkmap/).
 
 ## Testing & guarantees
 

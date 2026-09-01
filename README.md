@@ -236,6 +236,38 @@ const d = decodeRoute(code, id => idx.has(id));
 if (d && !d.error) console.log(d.valid, d.algorithm, d.dirMode, d.transportMode);
 ```
 
+#### Map diff
+
+`diffMaps(srcMap, dstMap)` compares two maps and returns a topologically
+ordered list of arkdelta-style ops — the same vocabulary ArkMap Studio's
+editor produces (`ADD_AREA`, `EDIT_AREA`, `EDIT_ENV_COLOR`, `ADD_ROOM`,
+`MOVE_ROOM_TO_AREA`, `DELETE_ROOM`, `MOVE_ROOM`, `EDIT_ROOM`, `DELETE_EXIT` /
+`ADD_EXIT`, `EDIT_EXIT`, `PAINT_BATCH`, `ADD_CL` / `EDIT_CL` / `DELETE_CL`,
+`ADD_LABEL` / `EDIT_LABEL` / `MOVE_LABEL` / `RESIZE_LABEL` / `DELETE_LABEL`,
+`DELETE_AREA`). Universal — works on any arkmap-shaped maps, any MUD.
+Available from the root and under the `arkmap/diff` subpath.
+
+```js
+import { diffMaps } from 'arkmap/diff';
+
+const { entries, stats, overlap, srcRooms, dstRooms } = diffMaps(oldMap, newMap);
+// entries — ordered, deterministic ops; each carries a human-readable `label`
+//           (Polish, same as ArkMap Studio's history panel)
+// stats   — per-op-type counts
+// overlap — room-id kinship ratio 0..1: a low value warns you are probably
+//           diffing two unrelated maps
+```
+
+Semantics worth knowing:
+
+- **Canonical comparison** — the same map loaded from `.dat` and `.arkmap`
+  produces an *empty* diff (defaults stripped, array fields sorted).
+- **Cascading deletes** — deleting a room also trims exits pointing at it, so
+  no separate `DELETE_EXIT` ops appear for those.
+- **Move cycles** — swapping two rooms' positions breaks the collision cycle
+  with one `EDIT_ROOM` fallback, then the rest resolves as `MOVE_ROOM`.
+- **Deterministic** — same input pair, byte-identical output.
+
 ### Demo viewer
 
 A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and

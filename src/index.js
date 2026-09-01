@@ -52,5 +52,8 @@ export {
   ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX, encodeRoute, decodeRoute,
 } from './waypoints.js';
 
+// universal map diff — ordered arkdelta-style op list between two maps
+export { diffMaps } from './diff.js';
+
 /** Checksum algorithm version implemented by this package ('v4' = XXH3-64 canonical). */
 export const CHECKSUM_ALG = 'v4';

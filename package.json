@@ -13,6 +13,7 @@
     "./arkadia/transports": "./src/arkadia-transports.js",
     "./graph": "./src/graph.js",
     "./transports": "./src/transports.js",
+    "./waypoints": "./src/waypoints.js",
     "./package.json": "./package.json"
   },
   "files": [

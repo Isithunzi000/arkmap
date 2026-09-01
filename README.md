@@ -213,6 +213,29 @@ const idx = buildIndex(map);
 const route = findRoute(a, b, idx, { transportMode: 'normal', transports: ARKADIA_TRANSPORTS });
 ```
 
+#### Waypoint route codes
+
+Waypoint lists travel between tools as compact text codes —
+`ARKMAP2:<algo><dir><trans>:base64(ids CSV)` — carrying the routing options
+alongside the room ids. Universal (any map, any MUD), fail-closed on
+corruption, hard-capped (`WP_MAX` = 200 waypoints, `ROUTE_CODE_MAX` = 64 000
+chars). Available from the root and under the `arkmap/waypoints` subpath.
+
+| function | description |
+|---|---|
+| `encodeRoute(waypoints, opts?)` | `[id, null, id, …]` + `{ algorithm, dirMode, transportMode }` → code string, or `''` when unencodable (never produces a code the decoder would reject) |
+| `decodeRoute(code, hasRoom?)` | → `{ ids, valid, invalidCount, total, algorithm, dirMode, transportMode }`; `null` on corruption; `{ error: 'too-many', max, total }` over the waypoint limit. `hasRoom(id)` (e.g. `id => idx.has(id)`) splits ids into `valid` / `invalidCount` |
+
+```js
+import { encodeRoute, decodeRoute } from 'arkmap/waypoints';
+
+const code = encodeRoute([729, 3760, 10313], { algorithm: 'astar', dirMode: 'all', transportMode: 'normal' });
+// 'ARKMAP2:awn:...' — paste-safe, shareable
+
+const d = decodeRoute(code, id => idx.has(id));
+if (d && !d.error) console.log(d.valid, d.algorithm, d.dirMode, d.transportMode);
+```
+
 ### Demo viewer
 
 A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and

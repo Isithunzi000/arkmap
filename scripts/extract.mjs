@@ -120,9 +120,11 @@ async function main() {
       if (existing !== content) { console.error(`DRIFT: ${path}`); bad++; }
     }
     // unexpected extra files in src/ (hand-written modules are allowed:
-    // arkmap.js, index.js, graph.js, transports.js, arkadia-transports.js)
+    // arkmap.js, index.js, graph.js, transports.js, arkadia-transports.js,
+    // waypoints.js)
     const allowed = new Set([...outputs.keys()].map(p => p.replace(/^src\//, ''))
-      .concat(['arkmap.js', 'index.js', 'graph.js', 'transports.js', 'arkadia-transports.js']));
+      .concat(['arkmap.js', 'index.js', 'graph.js', 'transports.js', 'arkadia-transports.js',
+               'waypoints.js']));
     for (const f of readdirSync(join(ROOT, 'src'))) {
       if (!allowed.has(f)) { console.error(`UNEXPECTED: src/${f}`); bad++; }
     }

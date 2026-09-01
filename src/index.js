@@ -47,5 +47,10 @@ export {
   addTransportChecksums, verifyTransportChecksums, buildTransportEdges,
 } from './transports.js';
 
+// waypoint route codes (ARKMAP2) — universal import/export for any map
+export {
+  ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX, encodeRoute, decodeRoute,
+} from './waypoints.js';
+
 /** Checksum algorithm version implemented by this package ('v4' = XXH3-64 canonical). */
 export const CHECKSUM_ALG = 'v4';

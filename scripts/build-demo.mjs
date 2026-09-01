@@ -18,7 +18,7 @@ const ORDER = [
   'constants.js', 'arkadia.js', 'arkadia-transports.js', 'ansi-pal.js', 'opposite.js',
   'mudlet-dat.js', 'validate.js', 'checksum.js', 'stable-stringify.js',
   'canonicalize.js', 'dat-to-arkmap.js', 'arkmap-to-dat.js',
-  'suppressors.js', 'arkmap.js', 'transports.js', 'graph.js',
+  'suppressors.js', 'arkmap.js', 'transports.js', 'graph.js', 'waypoints.js',
 ];
 
 const FOOTER = `
@@ -33,6 +33,7 @@ globalThis.arkmap = {
   addTransportChecksums, verifyTransportChecksums, buildTransportEdges,
   TRANSPORT_BOARDING_PENALTY, TRANSPORT_TIME_RATIO, TRANSPORT_DEFAULT_TIME,
   TRANSPORTS_FORMAT, TRANSPORTS_VERSION, ARKADIA_TRANSPORTS,
+  encodeRoute, decodeRoute, ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

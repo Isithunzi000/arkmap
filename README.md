@@ -221,21 +221,38 @@ const route = findRoute(a, b, idx, { transportMode: 'normal', transports: ARKADI
 #### Waypoint route codes
 
 Waypoint lists travel between tools as compact text codes —
-`ARKMAP2:<algo><dir><trans>:base64(ids CSV)` — carrying the routing options
-alongside the room ids. Universal (any map, any MUD), fail-closed on
-corruption, hard-capped (`WP_MAX` = 200 waypoints, `ROUTE_CODE_MAX` = 64 000
-chars). Available from the root and under the `arkmap/waypoints` subpath.
+`arkmap:<algo><dir><trans>:<ids CSV>:<crc8>` — carrying the routing options
+alongside the room ids:
+
+```
+arkmap:dwp:2188,1998,729:16990e69
+       │││   │               └─ integrity crc (see below)
+       │││   └─ waypoints: canonical CSV of room ids
+       ││└─ transports: p = off, n = normal, g = aggressive
+       │└── directions: k = cardinal, p = +vertical, w = all
+       └─── algorithm: d = Dijkstra, a = A*
+```
+
+Universal (any map, any MUD), fully lowercase and **case-insensitive** on
+decode, fail-closed on corruption, hard-capped (`WP_MAX` = 200 waypoints,
+`ROUTE_CODE_MAX` = 64 000 chars). The trailing `crc8` — first 8 hex chars of
+xxh3-64 over the lowercased `arkmap:<flags>:<ids>` core — catches accidental
+damage when a code is pasted around (typos, truncation, mangled characters);
+it is an integrity check, not a security feature. Older code generations
+(`ARKMAP:`/`ARKMAP2:`, base64 payloads) are rejected by design — no backward
+compatibility. Available from the root and under the `arkmap/waypoints`
+subpath.
 
 | function | description |
 |---|---|
 | `encodeRoute(waypoints, opts?)` | `[id, null, id, …]` + `{ algorithm, dirMode, transportMode }` → code string, or `''` when unencodable (never produces a code the decoder would reject) |
-| `decodeRoute(code, hasRoom?)` | → `{ ids, valid, invalidCount, total, algorithm, dirMode, transportMode }`; `null` on corruption; `{ error: 'too-many', max, total }` over the waypoint limit. `hasRoom(id)` (e.g. `id => idx.has(id)`) splits ids into `valid` / `invalidCount` |
+| `decodeRoute(code, hasRoom?)` | → `{ ids, valid, invalidCount, total, algorithm, dirMode, transportMode }`; `null` on structural corruption; `{ error: 'crc', expected, actual }` on checksum mismatch; `{ error: 'too-many', max, total }` over the waypoint limit. `hasRoom(id)` (e.g. `id => idx.has(id)`) splits ids into `valid` / `invalidCount` |
 
 ```js
 import { encodeRoute, decodeRoute } from 'arkmap/waypoints';
 
 const code = encodeRoute([729, 3760, 10313], { algorithm: 'astar', dirMode: 'all', transportMode: 'normal' });
-// 'ARKMAP2:awn:...' — paste-safe, shareable
+// 'arkmap:awn:729,3760,10313:…' — paste-safe, shareable
 
 const d = decodeRoute(code, id => idx.has(id));
 if (d && !d.error) console.log(d.valid, d.algorithm, d.dirMode, d.transportMode);

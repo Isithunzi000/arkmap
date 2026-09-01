@@ -5060,50 +5060,43 @@ function searchRooms(query, mapObj, limit = 25) {
 // ── src/waypoints.js ──
 // waypoints.js — universal route codes (waypoint import/export) for any map.
 //
-// Hand-written module (not extracted from the standalone app; logic mirrors
-// the app's wpEncodeRoute/wpDecodeRoute byte-for-byte in behavior).
+// Hand-written module (not extracted from the standalone app).
 //
-// Format: ARKMAP2:<algo><dir><trans>:base64(ids CSV)
+// Format (generation 3): arkmap:<algo><dir><trans>:<ids CSV>:<crc8>
 //   algo:  d = dijkstra, a = astar
 //   dir:   k = cardinal, p = vertical, w = all
 //   trans: p = off,     n = normal,  g = aggressive
+//   ids:   comma-separated positive integer room ids, canonical form
+//          (no leading zeros, no whitespace)
+//   crc8:  first 8 hex chars of xxh3_64hex over the lowercased prefix
+//          "arkmap:<flags>:<ids>" — paste-integrity check (typos, truncated
+//          or mangled codes), not a security feature
+// Example: arkmap:dwp:2188,1998,729:9f2c41aa
+//
+// The encoder always emits lowercase; the decoder lowercases the whole code
+// before parsing, so letter case is insignificant everywhere (prefix, flags,
+// crc). There is no backward compatibility with older generations
+// (ARKMAP:/ARKMAP2:, base64 payloads) — they decode to null by design.
 //
 // Fail-closed everywhere: the encoder never produces a code its own decoder
-// would reject; the decoder returns null on any structural corruption and a
-// { error: 'too-many' } object when the waypoint limit is exceeded.
+// would reject; the decoder returns null on any structural corruption, a
+// { error: 'crc' } object on checksum mismatch and { error: 'too-many' }
+// when the waypoint limit is exceeded.
 //
 // Keep this file bundler-friendly for scripts/build-demo.mjs:
-// plain function/const declarations, no imports, one-line export list.
+// plain function/const declarations, single-line import, one-line export list.
 
-const ROUTE_CODE_PREFIX = 'ARKMAP2';
+
+const ROUTE_CODE_PREFIX = 'arkmap';
 const ROUTE_CODE_MAX = 64000;   // hard cap on code length (decoder fails closed above)
 const WP_MAX = 200;             // hard cap on waypoints per route code
 
-// base64 that works in Node and browsers without touching Buffer/atob globals
-const _B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-function _b64encode(str) {
-  const bytes = new TextEncoder().encode(str);
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i], b = bytes[i + 1], c = bytes[i + 2];
-    out += _B64[a >> 2] + _B64[((a & 3) << 4) | (b === undefined ? 0 : b >> 4)];
-    out += b === undefined ? '=' : _B64[((b & 15) << 2) | (c === undefined ? 0 : c >> 6)];
-    out += c === undefined ? '=' : _B64[c & 63];
-  }
-  return out;
-}
-function _b64decode(str) {
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(str) || str.length % 4 !== 0) throw new Error('bad base64');
-  const bytes = [];
-  for (let i = 0; i < str.length; i += 4) {
-    const c = [0, 1, 2, 3].map(k => (str[i + k] === '=' ? -1 : _B64.indexOf(str[i + k])));
-    if (c.some(v => v < -1) || c[0] < 0 || c[1] < 0) throw new Error('bad base64');
-    const n = (c[0] << 18) | ((c[1] & 63) << 12) | ((c[2] & 63) << 6) | (c[3] & 63);
-    bytes.push((n >> 16) & 255);
-    if (c[2] >= 0) bytes.push((n >> 8) & 255);
-    if (c[3] >= 0) bytes.push(n & 255);
-  }
-  return new TextDecoder().decode(new Uint8Array(bytes));
+const _te = new TextEncoder();
+
+// crc of the normalized core "arkmap:<flags>:<ids>" — 32 bits of xxh3_64,
+// hex-lowercase by construction (matches the lowercased decode path).
+function _routeCrc(core) {
+  return xxh3_64hex(_te.encode(core)).slice(0, 8);
 }
 
 // encodeRoute(waypoints, opts) -> route code string, or '' when the route is
@@ -5121,40 +5114,42 @@ function encodeRoute(waypoints, opts) {
   const algoCode = o.algorithm === 'astar' ? 'a' : 'd';
   const dirCode = { cardinal: 'k', vertical: 'p', all: 'w' }[o.dirMode] || 'w';
   const transCode = { off: 'p', normal: 'n', aggressive: 'g' }[o.transportMode] || 'p';
-  try { return ROUTE_CODE_PREFIX + ':' + algoCode + dirCode + transCode + ':' + _b64encode(ids.join(',')); }
+  const core = ROUTE_CODE_PREFIX + ':' + algoCode + dirCode + transCode + ':' + ids.join(',');
+  try { return core + ':' + _routeCrc(core); }
   catch { return ''; }
 }
 
 // decodeRoute(code, hasRoom?) ->
-//   null                                  — structurally corrupt code
-//   { error: 'too-many', max, total }     — waypoint count over WP_MAX
+//   null                                        — structurally corrupt code
+//   { error: 'crc', expected, actual }          — integrity check failed
+//   { error: 'too-many', max, total }           — waypoint count over WP_MAX
 //   { ids, valid, invalidCount, total, algorithm, dirMode, transportMode }
-// hasRoom(id) — optional predicate (e.g. id => idx.has(id)); without it every
-// id counts as valid (valid = ids, invalidCount = 0). `ids` keeps all decoded
-// ids in order; `valid` holds only those passing hasRoom.
+// The code is case-insensitive: it is lowercased before parsing, and the crc
+// is computed over the lowercased form. hasRoom(id) — optional predicate
+// (e.g. id => idx.has(id)); without it every id counts as valid
+// (valid = ids, invalidCount = 0). `ids` keeps all decoded ids in order;
+// `valid` holds only those passing hasRoom.
 function decodeRoute(code, hasRoom) {
   const raw = (typeof code === 'string' ? code : '').trim();
-  if (!raw.startsWith(ROUTE_CODE_PREFIX + ':')) return null;
+  if (!raw) return null;
   if (raw.length > ROUTE_CODE_MAX) return null;   // fail-closed on huge pastes
-  const rest = raw.slice(ROUTE_CODE_PREFIX.length + 1);
-  if (rest.length < 5 || rest[3] !== ':') return null;
-  const flags = rest.slice(0, 3);
-  const b64 = rest.slice(4);
+  const norm = raw.toLowerCase();
+  if (!norm.startsWith(ROUTE_CODE_PREFIX + ':')) return null;
+  const parts = norm.slice(ROUTE_CODE_PREFIX.length + 1).split(':');
+  if (parts.length !== 3) return null;
+  const [flags, csv, crc] = parts;
   const algorithm = { d: 'dijkstra', a: 'astar' }[flags[0]];
   const dirMode = { k: 'cardinal', p: 'vertical', w: 'all' }[flags[1]];
   const transportMode = { p: 'off', n: 'normal', g: 'aggressive' }[flags[2]];
-  if (!algorithm || !dirMode || !transportMode || !b64) return null;
-  let decoded;
-  try { decoded = _b64decode(b64); } catch { return null; }
-  const tokens = decoded.split(',');
+  if (flags.length !== 3 || !algorithm || !dirMode || !transportMode) return null;
+  if (!/^[0-9a-f]{8}$/.test(crc)) return null;                 // crc shape
+  if (!/^[1-9][0-9]*(,[1-9][0-9]*)*$/.test(csv)) return null;  // canonical CSV
+  const core = ROUTE_CODE_PREFIX + ':' + flags + ':' + csv;
+  const expected = _routeCrc(core);
+  if (crc !== expected) return { error: 'crc', expected, actual: crc };
+  const tokens = csv.split(',');
   if (tokens.length > WP_MAX) return { error: 'too-many', max: WP_MAX, total: tokens.length };
-  if (!tokens.length) return null;
-  const ids = [];
-  for (const t of tokens) {
-    const n = parseInt(t.trim(), 10);
-    if (isNaN(n) || n <= 0 || String(n) !== t.trim()) return null;
-    ids.push(n);
-  }
+  const ids = tokens.map(t => parseInt(t, 10));
   const valid = [];
   let invalidCount = 0;
   for (const id of ids) {

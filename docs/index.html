@@ -12,6 +12,16 @@
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
   header h1 span { color: #6f7684; font-weight: 400; }
   .btn { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+  .btn-fit { padding: 3px 6px; width: 48px; white-space: normal; line-height: 1.15; text-align: center; }
+  .btn.mini { padding: 5px 9px; }
+  .rf { position: relative; display: inline-flex; }
+  .rf input { background: #1e232b; color: #dde3ea; border: 1px solid #2a3038; border-radius: 6px; padding: 6px 22px 6px 10px; font-size: 13px; width: 170px; }
+  .rf input.armed { outline: none; }
+  #routeStart.armed { border-color: #60a5fa; box-shadow: 0 0 0 1px #60a5fa; }
+  #routeEnd.armed { border-color: #f87171; box-shadow: 0 0 0 1px #f87171; }
+  .clr { position: absolute; right: 1px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #8b93a1; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  .clr:hover { color: #dde3ea; }
+  #routeResults { position: absolute; top: 110%; left: 0; min-width: 340px; max-height: 300px; overflow: auto; background: #1e232b; border: 1px solid #2a3038; border-radius: 6px; display: none; z-index: 10; }
   .btn:hover { background: #1d4fd7; }
   select { background: #1e232b; color: #dde3ea; border: 1px solid #2a3038; border-radius: 6px; padding: 6px 8px; font-size: 13px; max-width: 260px; }
   #status { color: #8b93a1; font-size: 13px; }
@@ -40,8 +50,14 @@
 <header>
   <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
-  <button class="btn" id="btnFit" hidden>Fit</button>
+  <button class="btn btn-fit" id="btnFit" hidden>Fit to window</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
+  <span id="routeBox" hidden style="position:relative;display:flex;gap:6px;align-items:center">
+    <span class="rf"><input id="routeStart" placeholder="Start: name or #id…" autocomplete="off"><button class="clr" id="clrStart" title="clear start">×</button></span>
+    <button class="btn mini" id="routeSwap" title="swap start and end">⇄</button>
+    <span class="rf"><input id="routeEnd" placeholder="End: name or #id…" autocomplete="off"><button class="clr" id="clrEnd" title="clear end">×</button></span>
+    <div id="routeResults"></div>
+  </span>
   <span id="searchBox" hidden style="position:relative">
     <input id="search" placeholder="Search room (name or #id)…" autocomplete="off" style="background:#1e232b;color:#dde3ea;border:1px solid #2a3038;border-radius:6px;padding:6px 10px;font-size:13px;width:240px">
     <div id="searchResults" style="position:absolute;top:110%;left:0;min-width:340px;max-height:300px;overflow:auto;background:#1e232b;border:1px solid #2a3038;border-radius:6px;display:none;z-index:10"></div>
@@ -65,11 +81,14 @@ const statusEl = document.getElementById('status'), emptyEl = document.getElemen
 const selArea = document.getElementById('selArea'), selZ = document.getElementById('selZ');
 const progEl = document.getElementById('progress'), progBar = progEl.querySelector('.bar'), progLabel = progEl.querySelector('.label');
 let map = null, view = { x: 0, y: 0, scale: 14 };
-let roomIdx = new Map();          // roomId -> { room, areaId }
+let roomIdx = new Map();          // roomId -> { room, areaId, areaName } (A.buildIndex)
 let scope = { areaId: 'all', z: null };
-let currentLoc = null;            // roomId — "pozycja" (klik na pokoj)
-let targetRoom = null;            // roomId — cel z wyszukiwarki
+let routeStart = null;            // roomId — poczatek trasy (pole Start / uzbrojony klik)
+let routeEnd = null;              // roomId — koniec trasy (pole Koniec / uzbrojony klik)
+let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki
 let route = null;                 // [roomId, ...] — aktywna trasa
+let armedField = null;            // 'start' | 'end' | null — pole czekajace na klik w pokoj
+let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
 
 // Mudlet direction deltas (data coords; screen Y is negated at draw time)
 const DELTA = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
@@ -246,17 +265,21 @@ function draw() {
     ctx.lineCap = 'butt';
   }
 
-  // highlight: pozycja (niebieski) i cel (pomaranczowy)
+  // highlight: start trasy (niebieski), koniec trasy (czerwony), wynik wyszukiwania (bialo-pomaranczowy)
   const ring = (room, color) => {
     ctx.strokeStyle = color; ctx.lineWidth = 0.22;
     ctx.strokeRect(room.x - rs - 0.14, -room.y - rs - 0.14, (rs + 0.14) * 2, (rs + 0.14) * 2);
   };
-  if (currentLoc != null) {
-    const e = roomIdx.get(currentLoc);
+  if (routeStart != null) {
+    const e = roomIdx.get(routeStart);
     if (e && visible(e.room, e.areaId)) ring(e.room, '#60a5fa');
   }
-  if (targetRoom != null) {
-    const e = roomIdx.get(targetRoom);
+  if (routeEnd != null) {
+    const e = roomIdx.get(routeEnd);
+    if (e && visible(e.room, e.areaId)) ring(e.room, '#f87171');
+  }
+  if (highlightRoom != null) {
+    const e = roomIdx.get(highlightRoom);
     if (e && visible(e.room, e.areaId)) {
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.3;
       ctx.strokeRect(e.room.x - rs - 0.26, -e.room.y - rs - 0.26, (rs + 0.26) * 2, (rs + 0.26) * 2);
@@ -315,7 +338,9 @@ function populateZ() {
     o.value = String(z); o.textContent = `z = ${z} (${n} rooms)`;
     selZ.appendChild(o);
   }
-  scope.z = zs.length ? zs[0][0] : null;   // default: most populated level
+  // zachowaj biezacy poziom, jesli istnieje w zakresie (skok do pokoju ustawia z przed populateZ);
+  // inaczej default: most populated level
+  if (scope.z === null || !counts.has(scope.z)) scope.z = zs.length ? zs[0][0] : null;
   if (scope.z !== null) selZ.value = String(scope.z);
 }
 
@@ -334,7 +359,7 @@ cv.addEventListener('pointerup', e => {
   if (wasClick && map) pickRoom(e);
 });
 
-// klik = ustaw "pozycje" (punkt startowy tras)
+// klik w pokoj: uzbrojone pole Start/Koniec = ustaw endpoint; bez uzbrojenia = tylko inspekcja (status)
 function pickRoom(e) {
   const rect = cv.getBoundingClientRect();
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
@@ -345,19 +370,51 @@ function pickRoom(e) {
     const d = Math.hypot(room.x - wx, -room.y - wy);
     if (d < bestD) { best = room; bestD = d; }
   }
-  if (best) {
-    currentLoc = best.id;
-    recomputeRoute();
-    draw();
+  if (!best) return;
+  if (armedField) {
+    setEndpoint(armedField, best.id);
+    disarm();
+    startEl.blur(); endEl.blur();
+  } else {
+    const e2 = roomIdx.get(best.id);
+    setStatus(`${best.name || 'room'} (#${best.id}) — ${e2 ? e2.areaName : '?'}, z=${best.z ?? 0}`, '');
   }
+  draw();
+}
+
+function setEndpoint(side, roomId) {
+  const e = roomIdx.get(roomId);
+  if (!e) return;
+  if (side === 'start') { routeStart = roomId; startEl.value = e.room.name || String(roomId); }
+  else { routeEnd = roomId; endEl.value = e.room.name || String(roomId); }
+  recomputeRoute();
 }
 
 function recomputeRoute() {
-  if (currentLoc != null && targetRoom != null && currentLoc !== targetRoom) {
-    route = findPath(currentLoc, targetRoom, roomIdx);
+  if (routeStart != null && routeEnd != null && routeStart !== routeEnd) {
+    route = A.findPath(routeStart, routeEnd, roomIdx);
   } else {
     route = null;
   }
+  routeStatus();
+}
+
+function routeStatus() {
+  if (routeStart == null || routeEnd == null) { setStatus(loadedMsg, loadedCls); return; }
+  if (routeStart === routeEnd) setStatus('start = end — already there', 'ok');
+  else if (route) setStatus(`route: ${route.length - 1} step(s)`, 'ok');
+  else setStatus('no route between the selected rooms', 'warn');
+}
+
+function arm(side) {
+  armedField = side;
+  startEl.classList.toggle('armed', side === 'start');
+  endEl.classList.toggle('armed', side === 'end');
+}
+function disarm() {
+  armedField = null;
+  startEl.classList.remove('armed');
+  endEl.classList.remove('armed');
 }
 
 function centerOn(room, minScale = 12) {
@@ -369,24 +426,23 @@ function centerOn(room, minScale = 12) {
 function jumpToRoom(roomId) {
   const e = roomIdx.get(roomId);
   if (!e) return;
-  targetRoom = roomId;
+  highlightRoom = roomId;
   scope.areaId = e.areaId;
   scope.z = e.room.z ?? 0;
   selArea.value = String(scope.areaId);
   populateZ();
   selZ.value = String(scope.z);
   centerOn(e.room);
-  recomputeRoute();
   draw();
-  const areaName = (map.areas || []).find(a => a.id === e.areaId)?.name || e.areaId;
-  const steps = route ? ` — route from selected position: ${route.length - 1} step(s)` : (currentLoc != null ? ' — no route from selected position' : '');
-  setStatus(`${e.room.name || 'room'} (#${roomId}) — ${areaName}, z=${scope.z}${steps}`, route || currentLoc == null ? 'ok' : 'warn');
+  setStatus(`${e.room.name || 'room'} (#${roomId}) — ${e.areaName}, z=${scope.z}`, 'ok');
 }
 
 // --- wyszukiwarka pokoi ---
 const searchEl = document.getElementById('search'), searchRes = document.getElementById('searchResults');
+const startEl = document.getElementById('routeStart'), endEl = document.getElementById('routeEnd');
+const routeRes = document.getElementById('routeResults'), routeBox = document.getElementById('routeBox');
 searchEl.addEventListener('input', () => {
-  const hits = searchRooms(searchEl.value, map);
+  const hits = A.searchRooms(searchEl.value, map);
   if (!hits.length) { searchRes.style.display = 'none'; return; }
   searchRes.innerHTML = '';
   for (const h of hits) {
@@ -402,114 +458,85 @@ searchEl.addEventListener('input', () => {
 });
 searchEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
-    const hits = searchRooms(searchEl.value, map);
+    const hits = A.searchRooms(searchEl.value, map);
     if (hits.length) { searchRes.style.display = 'none'; jumpToRoom(hits[0].room.id); }
   }
   if (e.key === 'Escape') { searchRes.style.display = 'none'; searchEl.blur(); }
 });
-document.addEventListener('click', (e) => { if (!searchRes.contains(e.target) && e.target !== searchEl) searchRes.style.display = 'none'; });
+
+// --- pola trasy Start/Koniec: wpisz fraze albo uzbroj pole i kliknij pokoj ---
+function showRouteResults(field, side) {
+  if (!map) { routeRes.style.display = 'none'; return; }
+  const hits = A.searchRooms(field.value, map);
+  if (!hits.length) { routeRes.style.display = 'none'; return; }
+  routeRes.innerHTML = '';
+  for (const h of hits) {
+    const div = document.createElement('div');
+    div.textContent = `${h.room.name || '(unnamed)'} — #${h.room.id} — ${h.areaName}`;
+    div.style.cssText = 'padding:6px 10px;cursor:pointer;font-size:13px';
+    div.onmouseenter = () => div.style.background = '#2a3038';
+    div.onmouseleave = () => div.style.background = '';
+    div.onclick = () => { routeRes.style.display = 'none'; setEndpoint(side, h.room.id); disarm(); field.blur(); draw(); };
+    routeRes.appendChild(div);
+  }
+  routeRes.style.left = (field.offsetLeft || 0) + 'px';
+  routeRes.style.display = 'block';
+}
+
+for (const [field, side] of [[startEl, 'start'], [endEl, 'end']]) {
+  field.addEventListener('focus', () => arm(side));
+  field.addEventListener('input', () => showRouteResults(field, side));
+  field.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const hits = A.searchRooms(field.value, map);
+      if (hits.length) { routeRes.style.display = 'none'; setEndpoint(side, hits[0].room.id); disarm(); field.blur(); draw(); }
+    }
+    if (e.key === 'Escape') { routeRes.style.display = 'none'; disarm(); field.blur(); }
+  });
+}
+document.getElementById('clrStart').onclick = () => { routeStart = null; startEl.value = ''; recomputeRoute(); draw(); };
+document.getElementById('clrEnd').onclick = () => { routeEnd = null; endEl.value = ''; recomputeRoute(); draw(); };
+document.getElementById('routeSwap').onclick = () => {
+  const id = routeStart, v = startEl.value;
+  routeStart = routeEnd; startEl.value = endEl.value;
+  routeEnd = id; endEl.value = v;
+  recomputeRoute(); draw();
+};
+
+document.addEventListener('click', (e) => {
+  if (!searchRes.contains(e.target) && e.target !== searchEl) searchRes.style.display = 'none';
+  if (!routeRes.contains(e.target) && e.target !== startEl && e.target !== endEl) routeRes.style.display = 'none';
+  if (e.target !== cv && !routeBox.contains(e.target)) disarm();   // klik w canvas NIE odzbraja — czeka na wybor pokoju
+});
 
 document.getElementById('btnFit').onclick = () => { fit(); draw(); };
+// autofit: zmniejszaj font, az "Fit to window" (3 linie) zmiesci sie w malym przycisku
+(function autofitFitBtn() {
+  const b = document.getElementById('btnFit');
+  let fs = 11;
+  b.style.fontSize = fs + 'px';
+  while (fs > 6 && (b.scrollWidth > b.clientWidth || b.scrollHeight > b.clientHeight)) {
+    fs -= 0.5; b.style.fontSize = fs + 'px';
+  }
+})();
 cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
 
 function afterLoad(msg, cls) {
-  roomIdx = new Map();
-  for (const area of map.areas || []) {
-    for (const room of area.rooms || []) roomIdx.set(room.id, { room, areaId: area.id });
-  }
-  currentLoc = null; targetRoom = null; route = null;
+  scope.z = null;   // nowa mapa -> populateSelectors wybierze domyslny (najludniejszy) poziom
+  roomIdx = A.buildIndex(map);
+  routeStart = routeEnd = highlightRoom = route = null;
+  startEl.value = endEl.value = '';
+  disarm();
+  routeRes.style.display = 'none';
+  loadedMsg = msg; loadedCls = cls;
   emptyEl.style.display = 'none';
   setStatus(msg, cls);
   populateSelectors();
   document.getElementById('btnFit').hidden = false;
   document.getElementById('searchBox').hidden = false;
+  routeBox.hidden = false;
   fit(); draw();
 }
-
-// ===GRAPH-BEGIN===
-// Demo-local graph helpers (pathfinding lands in the package as arkmap/graph in v2).
-// Dijkstra over exits + special_exits, weight = exit_weights[dir] (default 1).
-function neighborsOf(room) {
-  const out = [];
-  for (const [dir, tgt] of Object.entries(room.exits || {})) {
-    let w = room.exit_weights?.[dir];
-    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
-    out.push([tgt, w]);
-  }
-  for (const [cmd, tgt] of Object.entries(room.special_exits || {})) {
-    let w = room.exit_weights?.[cmd];
-    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
-    out.push([tgt, w]);
-  }
-  return out;
-}
-
-function findPath(fromId, toId, idx) {   // idx: Map roomId -> { room, areaId }
-  if (!idx.has(fromId) || !idx.has(toId)) return null;
-  if (fromId === toId) return [fromId];
-  const dist = new Map([[fromId, 0]]);
-  const prev = new Map();
-  // binary heap [cost, id]
-  const heap = [[0, fromId]];
-  const push = (item) => {
-    heap.push(item);
-    let i = heap.length - 1;
-    while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (heap[p][0] <= heap[i][0]) break;
-      [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
-    }
-  };
-  const pop = () => {
-    const top = heap[0], last = heap.pop();
-    if (heap.length) {
-      heap[0] = last;
-      let i = 0;
-      for (;;) {
-        const l = 2 * i + 1, r = l + 1;
-        let m = i;
-        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-        if (m === i) break;
-        [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
-      }
-    }
-    return top;
-  };
-  while (heap.length) {
-    const [d, id] = pop();
-    if (id === toId) {
-      const path = [toId];
-      let cur = toId;
-      while (prev.has(cur)) { cur = prev.get(cur); path.push(cur); }
-      return path.reverse();
-    }
-    if (d > (dist.get(id) ?? Infinity)) continue;
-    for (const [nid, w] of neighborsOf(idx.get(id).room)) {
-      if (!idx.has(nid)) continue;
-      const nd = d + w;
-      if (nd < (dist.get(nid) ?? Infinity)) { dist.set(nid, nd); prev.set(nid, id); push([nd, nid]); }
-    }
-  }
-  return null;
-}
-
-function searchRooms(query, mapObj, limit = 25) {
-  const q = String(query || '').trim().toLowerCase();
-  if (!q) return [];
-  const asId = /^#?(\d+)$/.exec(q);
-  const out = [];
-  for (const area of mapObj?.areas || []) {
-    for (const room of area.rooms || []) {
-      const name = (room.name || '').toLowerCase();
-      const hit = asId ? room.id === parseInt(asId[1]) : name.includes(q);
-      if (hit) out.push({ room, areaId: area.id, areaName: area.name || String(area.id) });
-      if (out.length >= limit) return out;
-    }
-  }
-  return out;
-}
-// ===GRAPH-END===
 
 // ===CHECKSUM-STATUS-BEGIN===
 // Szczegolowy status integralnosci: co jest zepsute i gdzie (pokoj/area/meta/alg).

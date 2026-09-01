@@ -326,8 +326,10 @@ Semantics worth knowing:
 `.arkdelta` is the edit-delta format of ArkMap Studio: an ordered op log
 (25 op types) cut against a base map, with canonical XXH3-64 integrity
 checksums and optional Ed25519 author signatures. The package ships the
-**reader side**: fail-closed validation, signature verification and base
-identity. Available from the root and under the `arkmap/delta` subpath.
+**reader** (fail-closed validation, signature verification, base identity —
+`arkmap/delta-validate`) and the **writer** (delta build, deterministic
+compaction, op serialization — `arkmap/delta-build`). Both are also exported
+from the root.
 
 | function | description |
 |---|---|
@@ -335,12 +337,15 @@ identity. Available from the root and under the `arkmap/delta` subpath.
 | `verifyDeltaSignature(delta)` | async Ed25519 verification → `{ state: 'unsigned' \| 'claimed' \| 'ok' \| 'bad', ... }`; never refuses the load |
 | `computeBaseInfo(map, precomputed?)` | base-map identity for `meta.base` comparison → `{ crc, version?, revision?, areas }` |
 | `deltaChecksums(meta, ops)` | canonical integrity sums `{ file, ops[] }` |
+| `buildDelta(log, base, opts?)` | op log (the shape `diffMaps` returns) → `.arkdelta` file text; sid `d:N` allocation, compaction, checksums |
+| `serializeDeltaOps(ops, base, opts?)` | ready ops → `.arkdelta` file text (fresh meta + checksums) |
+| `DELTA_EXPORTABLE` | the 25 op types a delta can carry |
 
 Constants: `ARKDELTA_FORMAT` (`'arkdelta'`) · `ARKDELTA_FORMAT_VERSION` (`3`) ·
 `ARKDELTA_MAX_OPS` (`5000`) · `ARKDELTA_MAX_BYTES` (8 MiB).
 
 ```js
-import { validateDeltaText, verifyDeltaSignature } from 'arkmap/delta';
+import { validateDeltaText, verifyDeltaSignature } from 'arkmap/delta-validate';
 
 const res = validateDeltaText(text);            // English messages
 const resPl = validateDeltaText(text, { locale: 'pl' }); // Studio-pinned Polish
@@ -355,6 +360,13 @@ out-of-sequence ops, unresolved `d:N` symbolic ids and prototype-polluting
 keys all refuse the load. Polish messages are byte-identical to ArkMap
 Studio's validator, so Studio can adopt this package with zero user-visible
 change (see [Internationalization](#internationalization)).
+
+The writer is **deterministic**: same log and base, byte-identical file.
+Compaction (spec §8) folds redundant chains (edit→edit, add→edit, add→delete,
+paint merges) without changing the applied result. Op labels are copied from
+the log entries — produce them with `diffMaps(a, b, { locale: 'pl' })` for a
+Polish delta. The round trip is closed: `validateDeltaText(buildDelta(log, base))`
+always validates.
 
 #### Token-indexed room search
 

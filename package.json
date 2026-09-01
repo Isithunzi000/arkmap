@@ -19,7 +19,8 @@
     "./render-svg": "./src/render-svg.js",
     "./render-png": "./src/render-png.js",
     "./package.json": "./package.json",
-    "./delta": "./src/delta-validate.js"
+    "./delta-validate": "./src/delta-validate.js",
+    "./delta-build": "./src/delta-build.js"
   },
   "files": [
     "src/",

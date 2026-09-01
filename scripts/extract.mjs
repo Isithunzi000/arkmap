@@ -75,6 +75,8 @@ const BLOCKS = [
     exports: ['checkSuppressorsInMap', '_findMissingSuppressors'] },
   { out: 'delta-validate.js',  from: 20895, to: 22369, status: 'maintained',
     note: '.arkdelta reader (H1): validator + schema + sid machinery + checksums from the ARKDELTA block, signature verify from the identity block (20317-20337) with the Ed25519 fallback (20126-20218, verify-only subset). Divergences: i18n via locale.js (EN default, PL byte-pinned to Studio), parallel codes array, VALID_DIRS derived from constants.js' },
+  { out: 'delta-build.js',     from: 21007, to: 22029, status: 'maintained',
+    note: '.arkdelta writer (H2): _deltaStripRoom, _deltaOpRefs/_deltaChainKey/_deltaTryFold, _compactDeltaOps, buildDelta, DELTA_EXPORTABLE, _deltaSerializeOps from the ARKDELTA block. Divergences: log/base as explicit params (Studio uses global state), meta.app_version via opts.appVersion (field omitted when not given), file-save glue and signing stay in Studio' },
 ];
 
 // --- logic normalization ----------------------------------------------------

@@ -65,6 +65,10 @@ export {
   validateDeltaText, verifyDeltaSignature, computeBaseInfo, deltaChecksums,
 } from './delta-validate.js';
 
+// .arkdelta writer: op-log → delta file text, deterministic compaction,
+// op serialization (labels copied from log entries — localize at production)
+export { buildDelta, serializeDeltaOps, DELTA_EXPORTABLE } from './delta-build.js';
+
 // token-indexed room search (scoring parity with ArkMap Studio planner search)
 export { buildSearchIndex, searchIndexed } from './search-index.js';
 

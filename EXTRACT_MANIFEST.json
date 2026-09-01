@@ -107,6 +107,15 @@
       ],
       "sha256": "2773e395b2e9b76a7624ab26af51d8418978f31434601cb835c69629a7fc3c65",
       "note": ".arkdelta reader (H1): validator + schema + sid machinery + checksums from the ARKDELTA block, signature verify from the identity block (20317-20337) with the Ed25519 fallback (20126-20218, verify-only subset). Divergences: i18n via locale.js (EN default, PL byte-pinned to Studio), parallel codes array, VALID_DIRS derived from constants.js"
+    },
+    "src/delta-build.js": {
+      "status": "maintained",
+      "lines": [
+        21007,
+        22029
+      ],
+      "sha256": "ec3f5d4c48c260e2ee964578065831fbc980462124614ac5546ec8a2be31e977",
+      "note": ".arkdelta writer (H2): _deltaStripRoom, _deltaOpRefs/_deltaChainKey/_deltaTryFold, _compactDeltaOps, buildDelta, DELTA_EXPORTABLE, _deltaSerializeOps from the ARKDELTA block. Divergences: log/base as explicit params (Studio uses global state), meta.app_version via opts.appVersion (field omitted when not given), file-save glue and signing stay in Studio"
     }
   }
 }

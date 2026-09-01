@@ -55,8 +55,14 @@
   #progress .bar { height: 100%; width: 0%; background: #2563eb; border-radius: 3px; transition: width .12s linear; }
   #progress .bar.indet { width: 30%; animation: slide 1.1s ease-in-out infinite alternate; }
   @keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
-  /* room info panel (top-right) — unarmed click / search jump opens it */
-  #roomPanel { position: absolute; top: 10px; right: 10px; width: 240px; background: #1b1f26; border: 1px solid #2a3038; border-radius: 8px; padding: 10px 12px; z-index: 6; font-size: 13px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+  /* zoom bar (top-right): - / fit / + and live ratio vs last fit */
+  #zoomBar { position: absolute; top: 10px; right: 10px; z-index: 7; display: flex; gap: 4px; align-items: center; background: #1b1f26; border: 1px solid #2a3038; border-radius: 8px; padding: 4px 6px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+  #zoomBar[hidden] { display: none; }
+  #zoomBar button { background: #2563eb; color: #fff; border: 0; border-radius: 5px; min-width: 26px; height: 24px; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 5px; }
+  #zoomBar button:hover { background: #1d4fd7; }
+  #zoomPct { color: #8b93a1; font-size: 12px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  /* room info panel (top-right, below the zoom bar) — unarmed click / search jump opens it */
+  #roomPanel { position: absolute; top: 48px; right: 10px; width: 240px; background: #1b1f26; border: 1px solid #2a3038; border-radius: 8px; padding: 10px 12px; z-index: 6; font-size: 13px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
   #roomPanel[hidden] { display: none; }
   #roomPanelX { position: absolute; top: 4px; right: 8px; background: none; border: 0; color: #8b93a1; cursor: pointer; font-size: 15px; padding: 2px 4px; }
   #roomPanelX:hover { color: #dde3ea; }
@@ -118,6 +124,12 @@
   <div id="empty"><div>Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.</div><div>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div></div>
   <div id="progress"><div class="box"><div class="label">loading…</div><div class="track"><div class="bar"></div></div></div></div>
   <div id="drop">drop to load</div>
+  <div id="zoomBar" hidden>
+    <button id="zoomOut" title="zoom out">−</button>
+    <button id="zoomFit" title="fit to window">⤢</button>
+    <button id="zoomIn" title="zoom in">+</button>
+    <span id="zoomPct">100%</span>
+  </div>
   <div id="roomPanel" hidden>
     <button id="roomPanelX" title="close">×</button>
     <div id="roomPanelBody"></div>
@@ -146,6 +158,7 @@ const codeEl = document.getElementById('routeCode');
 const roomPanel = document.getElementById('roomPanel'), roomPanelBody = document.getElementById('roomPanelBody');
 const mmEl = document.getElementById('minimap');
 const ovEl = document.getElementById('routeOv'), ovc = document.getElementById('routeOvCv');
+const zoomBar = document.getElementById('zoomBar'), zoomPct = document.getElementById('zoomPct');
 
 let map = null, view = { x: 0, y: 0, scale: 14 };
 let roomIdx = new Map();          // roomId -> { room, areaId, areaName } (A.buildIndex)
@@ -160,6 +173,7 @@ let armedField = null;            // 'start' | 'end' | 'via' | null — czeka na
 let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
 let ovGeom = null;                // geometria schematycznego podgladu trasy (cache)
 let mmDirty = true, mmCache = null, mmXf = null, mmDrag = false;  // minimapa geograficzna
+let lastFitScale = null;          // skala ostatniego fit — baza procentu na pasku zoomu
 
 // waypoint marker colors (cycle) — shared by map rings, chips and the route overview
 const WP_COLORS = ['#00c896', '#4a90e8', '#e84a90', '#e8c84a', '#a04ae8'];
@@ -182,6 +196,10 @@ function resize() {
   draw();
 }
 addEventListener('resize', resize);
+// header grows/shrinks when route controls (un)hide or chips appear — keep the
+// canvas backing store in sync with the layout box, otherwise fit/pick calc
+// uses stale dimensions and the view looks cropped
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => resize()).observe(cv.parentElement);
 
 function envColor(env, colors) {
   if (env == null) return '#3a4150';
@@ -231,6 +249,7 @@ function innerTri(x, y, px, py, rot, R) {
 }
 
 function draw() {
+  zoomPct.textContent = Math.round(view.scale / (lastFitScale || view.scale) * 100) + '%';
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
   if (!map) { drawMinimap(); drawRouteOv(); return; }
@@ -388,9 +407,12 @@ function fit() {
 
 function fitBBox(minX, maxX, minY, maxY) {   // minY/maxY w przestrzeni ekranowej (-room.y)
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
-  view.scale = Math.max(2, Math.min(40, Math.min(W / (maxX - minX + 4), H / (maxY - minY + 4))));
+  // dolny clamp 0.05 (nie 2): przy duzych obszarach / "all areas" fit MUSI moc
+  // oddalic ponizej 2, inaczej mapa jest obcieta; margines +4 jednostki na strone
+  view.scale = Math.max(0.05, Math.min(40, Math.min(W / (maxX - minX + 4), H / (maxY - minY + 4))));
   view.x = -(minX + maxX) / 2 * view.scale;
   view.y = -(minY + maxY) / 2 * view.scale;
+  lastFitScale = view.scale;
 }
 
 // fitRouteToView (jak w ArkMap Studio): dopasuj fragment trasy w BIEZACYM obszarze+Z;
@@ -667,12 +689,17 @@ function openRoomPanel(roomId) {
   roomPanel.hidden = false;
 }
 function closeRoomPanel() { roomPanel.hidden = true; }
-document.getElementById('roomPanelX').onclick = () => {
-  closeRoomPanel();
+// wspolna sciezka kasowania: pole szukajki + dropdown + podswietlenie + panel
+// (uzywana przez x szukajki i x panelu — oba zamykaja ten sam stan)
+function clearSearchAndHighlight() {
+  searchEl.value = '';
+  searchRes.style.display = 'none';
   highlightRoom = null;
+  closeRoomPanel();
   routeStatus();
   draw();
-};
+}
+document.getElementById('roomPanelX').onclick = () => clearSearchAndHighlight();
 
 // --- wyszukiwarka pokoi ---
 searchEl.addEventListener('input', () => {
@@ -698,14 +725,7 @@ searchEl.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { searchRes.style.display = 'none'; searchEl.blur(); }
 });
 // x w polu szukajki: czysci pole, dropdown, podswietlenie pokoju i panel — trasy NIE rusza
-document.getElementById('clrSearch').onclick = () => {
-  searchEl.value = '';
-  searchRes.style.display = 'none';
-  highlightRoom = null;
-  closeRoomPanel();
-  routeStatus();
-  draw();
-};
+document.getElementById('clrSearch').onclick = () => clearSearchAndHighlight();
 
 // --- pola trasy Start/Koniec: wpisz fraze albo uzbroj pole i kliknij pokoj ---
 function showRouteResults(field, side) {
@@ -878,7 +898,28 @@ document.getElementById('btnFit').onclick = () => { fit(); draw(); };
     fs -= 0.5; b.style.fontSize = fs + 'px';
   }
 })();
-cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
+// zoom kolkiem — do punktu pod kursorem (swiat pod kursorem zostaje w miejscu,
+// mapa nie "ucieka"); clamps zgodne z fit (0.05..60)
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = cv.getBoundingClientRect();
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  const mx = e.clientX - rect.left - W / 2, my = e.clientY - rect.top - H / 2;
+  const k = e.deltaY < 0 ? 1.15 : 0.87;
+  const ns = Math.max(0.05, Math.min(60, view.scale * k));
+  const r = ns / view.scale;
+  view.x = mx - (mx - view.x) * r;
+  view.y = my - (my - view.y) * r;
+  view.scale = ns;
+  draw();
+}, { passive: false });
+
+// pasek zoomu (prawy gorny rog): - / fit / + — zoom do srodka ekranu; ratio
+// aktualizuje sie w draw() po kazdej zmianie widoku
+function zoomStep(k) { view.scale = Math.max(0.05, Math.min(60, view.scale * k)); draw(); }
+document.getElementById('zoomIn').onclick = () => zoomStep(1.25);
+document.getElementById('zoomOut').onclick = () => zoomStep(0.8);
+document.getElementById('zoomFit').onclick = () => { fit(); draw(); };
 
 // --- minimapa geograficzna (prawy dolny rog): realne wspolrzedne pokoi biezacego
 // zakresu (obszar+Z), cache offscreen uniewazniany przy zmianie zakresu/mapy ---
@@ -1068,7 +1109,9 @@ function afterLoad(msg, cls) {
   document.getElementById('expPng').hidden = false;
   document.getElementById('searchBox').hidden = false;
   routeBox.hidden = false;
+  zoomBar.hidden = false;
   updateChips();
+  resize();   // naglowek urysl sie po (un)hide — canvas musi miec swieze wymiary przed fit
   fit(); draw();
 }
 

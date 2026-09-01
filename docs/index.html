@@ -161,17 +161,17 @@ const zoomBar = document.getElementById('zoomBar'), zoomPct = document.getElemen
 let map = null, view = { x: 0, y: 0, scale: 14 };
 let roomIdx = new Map();          // roomId -> { room, areaId, areaName } (A.buildIndex)
 let scope = { areaId: 'all', z: null };
-let routeStart = null;            // roomId — pierwszy waypoint trasy (pole Start / uzbrojony klik)
-let routeEnd = null;              // roomId — ostatni waypoint trasy (pole Koniec / uzbrojony klik)
-let routeVias = [];               // [roomId, ...] — waypointy posrednie (miedzy Start a Koniec)
-let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki / inspekcji
-let _lastCrossArrows = [];        // strzalki cross-area z ostatniego draw() — hit-test dblclick
-let routeLegs = [];               // [{from,to,path,hops}|null] — odcinki planu (A.planRoute)
+let routeStart = null;            // roomId — first route waypoint (Start field / armed click)
+let routeEnd = null;              // roomId — last route waypoint (End field / armed click)
+let routeVias = [];               // [roomId, ...] — intermediate waypoints (between Start and End)
+let highlightRoom = null;         // roomId — highlight from the general search / inspection
+let _lastCrossArrows = [];        // cross-area arrows from the last draw() — dblclick hit-test
+let routeLegs = [];               // [{from,to,path,hops}|null] — plan legs (A.planRoute)
 let planComplete = true, planTotal = 0;
-let armedField = null;            // 'start' | 'end' | 'via' | null — czeka na klik w pokoj
+let armedField = null;            // 'start' | 'end' | 'via' | null — waiting for a room click
 let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
-let ovGeom = null;                // geometria schematycznego podgladu trasy (cache)
-let mmDirty = true, mmCache = null, mmXf = null, mmDrag = false;  // minimapa geograficzna
+let ovGeom = null;                // schematic route-preview geometry (cache)
+let mmDirty = true, mmCache = null, mmXf = null, mmDrag = false;  // geographic minimap
 let lastFitScale = null;          // skala ostatniego fit — baza procentu na pasku zoomu
 
 // waypoint marker colors (cycle) — shared by map rings, chips and the route overview
@@ -227,7 +227,7 @@ function roomsInScope() {
   return out;
 }
 
-function glyphColor(room) {   // kontrast do koloru pokoju (jak symbolFillFor/contrastColor w ArkMap Studio)
+function glyphColor(room) {   // contrast against the room color (like symbolFillFor/contrastColor in ArkMap Studio)
   const m = envColor(room.env, map?.colors).match(/\d+/g);
   if (!m) return '#14171c';
   const lum = 0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2];
@@ -247,9 +247,9 @@ function innerTri(x, y, px, py, rot, R) {
   ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 
-// etykiety mapy (area.labels): tekst z kolorem fg i konturem albo oryginalna
-// pixmapa (data URI, cache per obszar|id); top=false pod pokojami, true nad.
-// no_scaling = staly rozmiar w px niezaleznie od zoomu (jak w ArkMap Studio).
+// map labels (area.labels): text with fg color and outline, or the original
+// pixmap (data URI, cached per area|id); top=false below rooms, true above.
+// no_scaling = fixed size in px regardless of zoom (as in ArkMap Studio).
 const labelImgCache = new Map();
 function drawMapLabels(top) {
   if (!map || view.scale < 4) return;   // przy duzym oddaleniu etykiety nieczytelne
@@ -294,19 +294,19 @@ function drawMapLabels(top) {
   }
 }
 
-// strzalki + etykiety cross-area 1:1 jak ArkMap Studio (drawCrossAreaArrows +
-// drawCrossAreaLabels): rysowane w pikselach ekranu (po restore), nie w jednostkach
-// mapy — linia max(1, roomPx/18) px, dlugosc max(4, roomPx*0.9) px, grot 0.35 pokoju;
-// strzalki ukryte ponizej pokoju 4.5px (Studio minZoom 0.25), etykiety ponizej 9px
-// (Studio 0.5). Etykieta: staly font 8-11px, smart placement (3 pozycje, pierwsza
-// bez kolizji z pokojami), boks z tlem, wpiecie w viewport z marginesem 2px.
+// cross-area arrows + labels 1:1 as in ArkMap Studio (drawCrossAreaArrows +
+// drawCrossAreaLabels): drawn in screen pixels (after restore), not in map
+// units — line max(1, roomPx/18) px, length max(4, roomPx*0.9) px, head 0.35 room;
+// arrows hidden below a 4.5px room (Studio minZoom 0.25), labels below 9px
+// (Studio 0.5). Label: fixed 8-11px font, smart placement (3 positions, first
+// without room collisions), box with background, clipped into the viewport with a 2px margin.
 function drawCrossArrowOverlay() {
   if (!map || !_lastCrossArrows.length) return;
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
   const roomPx = 0.72 * view.scale;                        // CELL*zoom w Studio (CELL=18)
-  if (roomPx < 4.5) return;                                // Studio: strzalki chowaja sie przy duzym oddaleniu
+  if (roomPx < 4.5) return;                                // Studio: arrows hide when zoomed far out
   const toSX = (mx) => W / 2 + view.x + mx * view.scale;
-  const toSY = (my) => H / 2 + view.y + my * view.scale;   // my juz w ukladzie ekranu
+  const toSY = (my) => H / 2 + view.y + my * view.scale;   // my already in screen coordinates
   const tickLen = Math.max(4, roomPx * 0.9);
   const lineW = Math.max(1, roomPx / 18);
   const hw = Math.max(1.5, roomPx * 0.35);
@@ -398,11 +398,11 @@ function draw() {
   const vis = roomsInScope();
   const visIds = new Set(vis.map(r => r.id));
 
-  // etykiety mapy pod pokojami (show_on_top rysowane pozniej, nad pokojami)
+  // map labels below rooms (show_on_top drawn later, above rooms)
   drawMapLabels(false);
 
   // exits: full lines inside the scope, short gray stubs for connections leaving it;
-  // wyjscia cross-area (inny obszar) zbieramy — strzalki rysuje drawCrossArrowOverlay()
+  // collect cross-area exits (different area) — drawCrossArrowOverlay() draws the arrows
   // PO restore, w pikselach ekranu, 1:1 jak ArkMap Studio
   ctx.lineWidth = 0.14; ctx.strokeStyle = '#565e6b';
   const crossArrows = [];
@@ -419,7 +419,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(room.x + d[0] * 0.45, -(room.y + d[1] * 0.45)); ctx.stroke();
       }
     }
-    // special exits do znanych pokoi w INNYM obszarze: strzalka w strone celu
+    // special exits to known rooms in ANOTHER area: arrow toward the target
     for (const [, tgt] of Object.entries(room.special_exits || {})) {
       const t = roomIdx.get(tgt);
       if (!t || visIds.has(t.room.id) || t.areaId === srcArea) continue;
@@ -428,7 +428,7 @@ function draw() {
       crossArrows.push({ room, sv, tgt, env: t.room.env, areaName: t.areaName });
     }
   }
-  // geometria strzalki: krawedz pokoju (przeciecie promienia z kwadratem) + wektor jednostkowy
+  // arrow geometry: room edge (ray-square intersection) + unit vector
   for (const a of crossArrows) {
     const len = Math.hypot(a.sv[0], a.sv[1]);
     if (!len) continue;
@@ -502,10 +502,10 @@ function draw() {
     }
   }
 
-  // etykiety mapy nad pokojami (show_on_top), przed nakladka trasy
+  // map labels above rooms (show_on_top), before the route overlay
   drawMapLabels(true);
 
-  // route overlay: per leg (odcinki miedzy waypointami); hops (transport) przerywane
+  // route overlay: per leg (segments between waypoints); hops (transport) dashed
   if (routeLegs.length) {
     ctx.lineCap = 'round';
     for (const leg of routeLegs) {
@@ -524,8 +524,8 @@ function draw() {
     ctx.lineCap = 'butt';
   }
 
-  // highlight: start trasy (niebieski), koniec trasy (czerwony), waypointy posrednie
-  // (cykl kolorow jak na minimapce trasy), wynik wyszukiwania (bialo-pomaranczowy)
+  // highlight: route start (blue), route end (red), intermediate waypoints
+  // (color cycle as on the route minimap), search result (white-orange)
   const ring = (room, color) => {
     ctx.strokeStyle = color; ctx.lineWidth = 0.22;
     ctx.strokeRect(room.x - rs - 0.14, -room.y - rs - 0.14, (rs + 0.14) * 2, (rs + 0.14) * 2);
@@ -552,7 +552,7 @@ function draw() {
   }
   ctx.restore();
 
-  drawCrossArrowOverlay();   // strzalki + etykiety w px ekranu, po restore — 1:1 jak Studio
+  drawCrossArrowOverlay();   // arrows + labels in screen px, after restore — 1:1 as in Studio
 
   drawMinimap();
   drawRouteOv();
@@ -566,18 +566,18 @@ function fit() {
   fitBBox(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
 }
 
-function fitBBox(minX, maxX, minY, maxY) {   // minY/maxY w przestrzeni ekranowej (-room.y)
+function fitBBox(minX, maxX, minY, maxY) {   // minY/maxY in screen space (-room.y)
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
-  // dolny clamp 0.05 (nie 2): przy duzych obszarach / "all areas" fit MUSI moc
-  // oddalic ponizej 2, inaczej mapa jest obcieta; margines +4 jednostki na strone
+  // lower clamp 0.05 (not 2): with large areas / "all areas" the fit MUST be able
+  // to zoom out below 2, otherwise the map is clipped; +4 units margin per side
   view.scale = Math.max(0.05, Math.min(40, Math.min(W / (maxX - minX + 4), H / (maxY - minY + 4))));
   view.x = -(minX + maxX) / 2 * view.scale;
   view.y = -(minY + maxY) / 2 * view.scale;
   lastFitScale = view.scale;
 }
 
-// fitRouteToView (jak w ArkMap Studio): dopasuj fragment trasy w BIEZACYM obszarze+Z;
-// jesli nic z trasy nie lezy w zakresie — skocz do obszaru pierwszego waypointa i tam fituj.
+// fitRouteToView (as in ArkMap Studio): fit the route fragment in the CURRENT area+Z;
+// if nothing from the route lies in range — jump to the first waypoint's area and fit there.
 function fitRoute() {
   if (!map) return;
   const wps = effectiveWps();
@@ -589,7 +589,7 @@ function fitRoute() {
       for (const id of leg.path) ids.add(id);
       for (const h of leg.hops || []) {
         if (!h) continue;
-        const via = hopViaRooms(h);   // przystanki posrednie przesiadek lądowych tez w bbox
+        const via = hopViaRooms(h);   // intermediate stops of land rides go into the bbox too
         if (via) for (const id of via) ids.add(id);
       }
     }
@@ -650,7 +650,7 @@ function populateZ() {
     o.value = String(z); o.textContent = `z = ${z} (${n} rooms)`;
     selZ.appendChild(o);
   }
-  // zachowaj biezacy poziom, jesli istnieje w zakresie (skok do pokoju ustawia z przed populateZ);
+  // keep the current level if it exists in range (a room jump sets z before populateZ);
   // inaczej default: most populated level
   if (scope.z === null || !counts.has(scope.z)) scope.z = zs.length ? zs[0][0] : null;
   if (scope.z !== null) selZ.value = String(scope.z);
@@ -671,9 +671,9 @@ cv.addEventListener('pointerup', e => {
   if (wasClick && map) pickRoom(e);
 });
 
-// dblclick: skok za strzalka cross-area do obszaru/pokoju docelowego
-// (jak w ArkMap Studio; fallback: pokoj z dokladnie jednym wyjsciem cross-area,
-// przy kilku — kierunek najblizszy kliknieciu)
+// dblclick: jump behind a cross-area arrow to the target area/room
+// (as in ArkMap Studio; fallback: a room with exactly one cross-area exit,
+// with several — the direction closest to the click)
 cv.addEventListener('dblclick', e => {
   if (!map) return;
   const rect = cv.getBoundingClientRect();
@@ -719,8 +719,8 @@ cv.addEventListener('dblclick', e => {
 });
 function visRoom(entry) { return visible(entry.room, entry.areaId); }
 
-// klik w pokoj: uzbrojone pole Start/Koniec = ustaw endpoint; +Via = wstaw waypoint;
-// bez uzbrojenia = inspekcja (panel informacji o pokoju + status)
+// room click: armed Start/End field = set endpoint; +Via = insert waypoint;
+// when not armed = inspection (room info panel + status)
 function pickRoom(e) {
   const rect = cv.getBoundingClientRect();
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
@@ -742,7 +742,7 @@ function pickRoom(e) {
   } else {
     const e2 = roomIdx.get(best.id);
     openRoomPanel(best.id);
-    searchEl.value = best.name || String(best.id);   // pokoj wpisany do szukajki jak recznie
+    searchEl.value = best.name || String(best.id);   // room typed into the search as if by hand
     setStatus(`${best.name || 'room'} (#${best.id}) — ${e2 ? e2.areaName : '?'}, z=${best.z ?? 0}`, '');
   }
   draw();
@@ -756,7 +756,7 @@ function setEndpoint(side, roomId) {
   recomputeRoute();
 }
 
-// +Via: pierwszy wolny slot — Start, potem Koniec, potem waypoint posredni przed Koncem
+// +Via: first free slot — Start, then End, then an intermediate waypoint before End
 function addVia(roomId) {
   const e = roomIdx.get(roomId);
   if (!e) return;
@@ -766,20 +766,20 @@ function addVia(roomId) {
   recomputeRoute();
 }
 
-function effectiveWps() {   // waypointy w kolejnosci: start, posrednie, koniec (bez pustych)
+function effectiveWps() {   // waypoints in order: start, intermediate, end (no empties)
   return [routeStart, ...routeVias, routeEnd].filter(x => x != null);
 }
 
-// transporty: osadzone w mapie (map.transports) maja pierszenstwo; dla mapy
-// Arkadii bez wlasnych linii dokladamy warstwe danych z pakietu
+// transports: map-embedded ones (map.transports) take precedence; for an Arkadia
+// map without its own lines we add the package data layer
 function transportsFor() {
   if (optTransEl.value === 'off' || !map) return null;
   if (map.transports) return map.transports;
   return A.isArkadiaMap(map) ? A.ARKADIA_TRANSPORTS : null;
 }
 
-// Przejazd lądowy (woz/dylizans/powoz) rozpisany na realne pokoje drogi —
-// minimapka trasy i fit pokazuja ksztalt trasy zamiast jednego skoku (jak _hopViaRooms w Studio).
+// A land ride (wagon/stagecoach/carriage) broken down into real road rooms —
+// the route minimap and fit show the route shape instead of a single jump (like _hopViaRooms in Studio).
 const _viaCache = new Map();
 function hopViaRooms(hop) {
   const key = hop.name + '|' + hop.from + '>' + hop.to;
@@ -799,8 +799,8 @@ function _computeHopVia(hop) {
     cur = leg.to; chain.push(cur);
   }
   if (cur !== hop.to) return null;
-  // piesza trasa miedzy kolejnymi przystankami — fizyczna droga wagonu,
-  // niezalezna od filtrow planera (all dirs, bez transportow)
+  // walking route between consecutive stops — the wagon's physical road,
+  // independent of planner filters (all dirs, no transports)
   let full = [];
   for (let k = 0; k + 1 < chain.length; k++) {
     const seg = A.findRoute(chain[k], chain[k + 1], roomIdx, { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off' });
@@ -879,7 +879,7 @@ function jumpToRoom(roomId) {
   setStatus(`${e.room.name || 'room'} (#${roomId}) — ${e.areaName}, z=${scope.z}`, 'ok');
 }
 
-// --- panel informacji o pokoju (prawy gorny rog) ---
+// --- room info panel (top right corner) ---
 function openRoomPanel(roomId) {
   const e = roomIdx.get(roomId);
   if (!e) return;
@@ -898,8 +898,8 @@ function openRoomPanel(roomId) {
   roomPanel.hidden = false;
 }
 function closeRoomPanel() { roomPanel.hidden = true; }
-// wspolna sciezka kasowania: pole szukajki + dropdown + podswietlenie + panel
-// (uzywana przez x szukajki i x panelu — oba zamykaja ten sam stan)
+// shared clearing path: search field + dropdown + highlight + panel
+// (used by the search x and the panel x — both close the same state)
 function clearSearchAndHighlight() {
   searchEl.value = '';
   searchRes.style.display = 'none';
@@ -910,7 +910,7 @@ function clearSearchAndHighlight() {
 }
 document.getElementById('roomPanelX').onclick = () => clearSearchAndHighlight();
 
-// --- wyszukiwarka pokoi ---
+// --- room search ---
 searchEl.addEventListener('input', () => {
   const hits = A.searchRooms(searchEl.value, map);
   if (!hits.length) { searchRes.style.display = 'none'; return; }
@@ -933,10 +933,10 @@ searchEl.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') { searchRes.style.display = 'none'; searchEl.blur(); }
 });
-// x w polu szukajki: czysci pole, dropdown, podswietlenie pokoju i panel — trasy NIE rusza
+// x in the search box: clears the field, dropdown, room highlight and panel — does NOT touch the route
 document.getElementById('clrSearch').onclick = () => clearSearchAndHighlight();
 
-// --- pola trasy Start/Koniec: wpisz fraze albo uzbroj pole i kliknij pokoj ---
+// --- route Start/End fields: type a phrase or arm a field and click a room ---
 function showRouteResults(field, side) {
   if (!map) { routeRes.style.display = 'none'; return; }
   const hits = A.searchRooms(field.value, map);
@@ -972,10 +972,10 @@ document.getElementById('routeSwap').onclick = () => {
   const id = routeStart, v = startEl.value;
   routeStart = routeEnd; startEl.value = endEl.value;
   routeEnd = id; endEl.value = v;
-  routeVias.reverse();   // pelna odwrotka trasy, nie tylko konce
+  routeVias.reverse();   // full route reversal, not just the ends
   recomputeRoute(); draw();
 };
-// +Via: uzbraja tryb waypointa — kolejny klik w pokoj wstawia go przed Koniec
+// +Via: arms waypoint mode — the next room click inserts it before End
 viaBtn.onclick = () => {
   if (armedField === 'via') { disarm(); routeStatus(); return; }
   arm('via');
@@ -990,7 +990,7 @@ function updateChips() {
   chipsRow.hidden = routeVias.length === 0;
   routeVias.forEach((id, i) => {
     const e = roomIdx.get(id);
-    const wpIdx = i + 1;   // pozycja w effectiveWps (0 = Start)
+    const wpIdx = i + 1;   // position in effectiveWps (0 = Start)
     const chip = document.createElement('span');
     chip.className = 'chip';
     chip.innerHTML = `<span class="dot" style="background:${WP_COLORS[wpIdx % WP_COLORS.length]}"></span><span>${wpIdx + 1}: ${esc(e?.room.name || '#' + id)}</span>`;
@@ -1004,7 +1004,7 @@ function updateChips() {
   });
 }
 
-// --- kod trasy: podglad na zywo + wklej+Enter = import ---
+// --- route code: live preview + paste+Enter = import ---
 function updateRouteCode() {
   const wps = effectiveWps();
   const code = wps.length >= 2
@@ -1041,8 +1041,8 @@ document.getElementById('routeCopy').onclick = () => {
   if (cb?.writeText) cb.writeText(code).then(() => setStatus('route code copied to clipboard', 'ok'), () => setStatus('copy failed', 'err'));
   else setStatus('clipboard unavailable — select the code and copy it manually', 'warn');
 };
-// Clear route: kasuje trase (pola + waypointy + kod + podglad), podswietlenie pokoju
-// i panel — ale NIE pole wyszukiwarki
+// Clear route: clears the route (fields + waypoints + code + preview), room highlight
+// and panel — but NOT the search field
 document.getElementById('routeClear').onclick = () => {
   routeStart = routeEnd = highlightRoom = null;
   routeVias = []; routeLegs = []; planComplete = true; planTotal = 0;
@@ -1053,7 +1053,7 @@ document.getElementById('routeClear').onclick = () => {
 };
 document.getElementById('routeFit').onclick = () => fitRoute();
 
-// --- eksport SVG (prawdziwy wektor) / PNG (raster 2x) biezacego zakresu z trasa ---
+// --- export SVG (true vector) / PNG (2x raster) of the current range with the route ---
 function currentExportSvg() {
   const routes = routeLegs.filter(l => l && l.path && l.path.length > 1).map(l => ({ path: l.path, hops: l.hops }));
   const wps = effectiveWps();
@@ -1070,8 +1070,8 @@ function downloadBlob(name, blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   return true;
 }
-// zapis z natywnym oknem "Zapisz jako" (nazwa do wpisania, rozszerzenie z types);
-// bez File System Access API (Firefox/Safari) albo przy bledzie API — klasyczny download
+// save with the native "Save as" dialog (name to type in, extension from types);
+// without the File System Access API (Firefox/Safari) or on API error — classic download
 async function saveBlob(name, mime, ext, blob) {
   if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
     try {
@@ -1106,7 +1106,7 @@ document.getElementById('expPng').onclick = async () => {
   } catch (e) { setStatus('PNG export failed: ' + e.message, 'err'); }
 };
 for (const el of [optAlgoEl, optDirEl, optTransEl]) el.onchange = () => { recomputeRoute(); draw(); };
-// Escape poza polami tekstowymi: odzbraja tryb waypointa albo kasuje podswietlenie pokoju
+// Escape outside text fields: disarms waypoint mode or clears the room highlight
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
   if (armedField === 'via') { disarm(); routeStatus(); return; }
@@ -1116,7 +1116,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   if (!searchRes.contains(e.target) && e.target !== searchEl) searchRes.style.display = 'none';
   if (!routeRes.contains(e.target) && e.target !== startEl && e.target !== endEl) routeRes.style.display = 'none';
-  if (e.target !== cv && !routeBox.contains(e.target)) disarm();   // klik w canvas NIE odzbraja — czeka na wybor pokoju
+  if (e.target !== cv && !routeBox.contains(e.target)) disarm();   // a canvas click does NOT disarm — it waits for a room pick
 });
 
 // zoom kolkiem — do punktu pod kursorem (swiat pod kursorem zostaje w miejscu,
@@ -1142,8 +1142,8 @@ document.getElementById('zoomIn').onclick = () => zoomStep(1.25);
 document.getElementById('zoomOut').onclick = () => zoomStep(0.8);
 document.getElementById('zoomFit').onclick = () => { fit(); draw(); };
 
-// --- minimapa geograficzna (prawy dolny rog): realne wspolrzedne pokoi biezacego
-// zakresu (obszar+Z), cache offscreen uniewazniany przy zmianie zakresu/mapy ---
+// --- geographic minimap (bottom right corner): real coordinates of rooms in the
+// current range (area+Z), offscreen cache invalidated on range/map change ---
 function drawMinimap() {
   if (!map) { mmEl.hidden = true; return; }
   mmEl.hidden = false;
@@ -1176,13 +1176,13 @@ function drawMinimap() {
   if (mmCache) mctx.drawImage(mmCache, 0, 0, W, H);
   if (!mmXf) return;
   const { sc, ox, oy } = mmXf;
-  // prostokat viewportu mapy glownej (w przestrzeni -room.y)
+  // main-map viewport rectangle (in -room.y space)
   const cw = cv.width / dpr, ch = cv.height / dpr;
   const wx0 = (-cw / 2 - view.x) / view.scale, wx1 = (cw / 2 - view.x) / view.scale;
   const ny0 = (-ch / 2 - view.y) / view.scale, ny1 = (ch / 2 - view.y) / view.scale;
   mctx.strokeStyle = 'rgba(255,255,255,0.75)'; mctx.lineWidth = 1;
   mctx.strokeRect(ox + wx0 * sc, oy + ny0 * sc, (wx1 - wx0) * sc, (ny1 - ny0) * sc);
-  // znaczniki: start (niebieski), koniec (czerwony), inspekcja (pomaranczowy)
+  // markers: start (blue), end (red), inspection (orange)
   const dot = (id, col) => {
     const e = roomIdx.get(id);
     if (!e || !visible(e.room, e.areaId)) return;
@@ -1194,7 +1194,7 @@ function drawMinimap() {
   if (highlightRoom != null) dot(highlightRoom, '#fb923c');
 }
 
-// pan mapy glownej przez klik/drag po minimapce (guard: pointerup/leave konczy drag)
+// pan the main map by click/drag on the minimap (guard: pointerup/leave ends the drag)
 mmEl.addEventListener('pointerdown', e => {
   if (!mmXf) return;
   mmDrag = true;
@@ -1214,10 +1214,10 @@ function mmPan(e) {
   draw();
 }
 
-// --- schematyczny podglad trasy (lewy dolny rog): polyline z delt krokow (clamp ±1),
-// NIE realne wspolrzedne (teleporty/hopy nie rozwalaja ksztaltu). Hopy przerywane,
-// przejazdy lądowe rozpisane na pokoje drogi, markery WP numerowane, zielony overlay
-// "jestes tu" = segmenty widoczne w viewportcie mapy glownej (jak #wp-overview w Studio).
+// --- schematic route preview (bottom left corner): polyline from step deltas (clamp ±1),
+// NOT real coordinates (teleports/hops do not break the shape). Hops dashed,
+// land rides broken down into road rooms, numbered WP markers, green
+// "you are here" overlay = segments visible in the main map viewport (like #wp-overview in Studio).
 function computeOvGeom() {
   const wps = effectiveWps();
   if (wps.length < 2 || !routeLegs.length) return null;
@@ -1254,7 +1254,7 @@ function drawRouteOv() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
   const { pts, segHop, ptRoom, wpMarkers } = ovGeom;
-  const PAD = 14;   // miejsce na markery WP
+  const PAD = 14;   // room for the WP markers
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const [px, py] of pts) {
     if (px < minX) minX = px; if (px > maxX) maxX = px;
@@ -1280,7 +1280,7 @@ function drawRouteOv() {
   g.lineCap = 'round'; g.lineJoin = 'round';
   strokePass(3, 'rgba(232,160,32,0.12)');              // glow
   strokePass(1.5, 'rgba(255,190,50,0.9)');             // linia glowna
-  // "jestes tu": segmenty, ktorych pokoj docelowy lezy na ekranie (biezacy obszar+Z)
+  // "you are here": segments whose target room is on screen (current area+Z)
   const cw = cv.width / dpr, ch = cv.height / dpr;
   const wx0 = (-cw / 2 - view.x) / view.scale, wx1 = (cw / 2 - view.x) / view.scale;
   const ny0 = (-ch / 2 - view.y) / view.scale, ny1 = (ch / 2 - view.y) / view.scale;
@@ -1292,7 +1292,7 @@ function drawRouteOv() {
   };
   strokePass(3, 'rgba(0,200,150,0.28)', onScreen);
   strokePass(1.5, 'rgba(0,230,170,0.95)', onScreen);
-  // markery WP — kolorowe kwadraty z numerami (cykl WP_COLORS)
+  // WP markers — colored squares with numbers (WP_COLORS cycle)
   const SZ = 5;
   for (const { ptIdx, wpIdx } of wpMarkers) {
     const [px, py] = toC(pts[ptIdx]);
@@ -1333,14 +1333,14 @@ function afterLoad(msg, cls) {
   routeBox.hidden = false;
   zoomBar.hidden = false;
   updateChips();
-  resize();   // naglowek urysl sie po (un)hide — canvas musi miec swieze wymiary przed fit
+  resize();   // the header reflows on (un)hide — the canvas needs fresh dimensions before fit
   fit(); draw();
 }
 
 // ===CHECKSUM-STATUS-BEGIN===
-// Szczegolowy status integralnosci: co jest zepsute i gdzie (pokoj/area/meta/alg).
-// Semantyka pol verifyChecksums: badRooms/badAreas = tresc zmieniona; missing* = obiekt
-// w pliku BEZ sumy (dodany); extra* = suma-sierota (obiekt usuniety); metaOk poza ok (D2).
+// Detailed integrity status: what is broken and where (room/area/meta/alg).
+// verifyChecksums field semantics: badRooms/badAreas = content changed; missing* = object
+// in the file WITHOUT a checksum (added); extra* = orphan checksum (object removed); metaOk outside ok (D2).
 function checksumStatus(fileName, rooms, cs) {
   if (!cs.present) return [`${fileName} — ${rooms} rooms — no checksums in file`, 'warn'];
   if (cs.algMismatch) return [`${fileName} — checksum algorithm mismatch: file has '${cs.algMismatch}', this viewer supports 'v4' (possible downgrade attempt)`, 'err'];
@@ -1360,9 +1360,9 @@ function checksumStatus(fileName, rooms, cs) {
 // ===CHECKSUM-STATUS-END===
 
 // ===TRANSPORT-STATUS-BEGIN===
-// Osobny status warstwy transportow (osadzone linie maja wlasne sumy v4, liczone
-// niezaleznie od sum pokoi). Transport to dodatek — problem obniza status do warn,
-// nigdy err (trasa pieszo zawsze istnieje jako fallback).
+// Separate status of the transport layer (embedded lines have their own v4 checksums,
+// computed independently of the room checksums). Transport is an add-on — a problem lowers the status to warn,
+// never err (a walking route always exists as a fallback).
 function transportStatus(m) {
   const ts = A.verifyTransportChecksums(m);
   if (!ts.present && !ts.unsigned) return null;                        // no transports at all
@@ -1385,7 +1385,7 @@ function loadArkmapText(fileName, text) {
   else {
     const [msg, cls] = checksumStatus(fileName, rooms, checksums);
     const ts = transportStatus(m);
-    // transports moga tylko obnizyc 'ok' -> 'warn'; reszta statusow przechodzi bez zmian
+    // transports can only lower 'ok' -> 'warn'; other statuses pass through unchanged
     afterLoad(ts ? msg + ts.suffix : msg, ts && cls === 'ok' ? ts.level : cls);
   }
 }

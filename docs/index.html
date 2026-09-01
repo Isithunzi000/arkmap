@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>arkmap — demo viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: #14171c; color: #dde3ea; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 10px 16px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #2a3038; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 span { color: #6f7684; font-weight: 400; }
+  .btn { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+  .btn:hover { background: #1d4fd7; }
+  #status { color: #8b93a1; font-size: 13px; }
+  #status.ok { color: #4ade80; }
+  #status.warn { color: #fbbf24; }
+  #status.err { color: #f87171; }
+  #wrap { flex: 1; position: relative; overflow: hidden; }
+  canvas { position: absolute; inset: 0; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20,23,28,.85); font-size: 18px; color: #93c5fd; border: 2px dashed #2563eb; }
+  #drop.on { display: flex; }
+  #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5c6470; text-align: center; pointer-events: none; }
+  code { background: #1e232b; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
+  <button class="btn" id="open">Open .dat / .arkmap…</button>
+  <input type="file" id="file" accept=".dat,.arkmap" hidden>
+  <span id="status">no map loaded — drop a file anywhere</span>
+</header>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="empty">Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.<br>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div>
+  <div id="drop">drop to load</div>
+</div>
+<script src="arkmap.bundle.js"></script>
+<script>
+'use strict';
+const A = globalThis.arkmap;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const statusEl = document.getElementById('status'), emptyEl = document.getElementById('empty');
+let map = null, view = { x: 0, y: 0, scale: 14 };
+
+function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = cls || ''; }
+
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect();
+  cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
+  draw();
+}
+addEventListener('resize', resize);
+
+function envColor(env, colors) {
+  if (env == null) return '#3a4150';
+  const custom = colors?.custom_env_colors?.[env];
+  if (Array.isArray(custom)) return `rgb(${custom[0]},${custom[1]},${custom[2]})`;
+  const ansiIdx = colors?.env_colors?.[env];
+  if (ansiIdx != null && A.ANSI_PAL[ansiIdx]) { const c = A.ANSI_PAL[ansiIdx]; return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  if (map && A.isArkadiaMap(map, null) && A.ARKADIA_ENVS[env]) { const c = A.ARKADIA_ENVS[env].rgb; return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  const c = A.ansiPaletteRgb(env);
+  return c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#3a4150';
+}
+
+function draw() {
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!map) return;
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  ctx.save();
+  ctx.translate(W / 2 + view.x, H / 2 + view.y);
+  ctx.scale(view.scale, view.scale);
+  ctx.lineWidth = 0.15; ctx.strokeStyle = '#565e6b';
+  for (const area of map.areas || []) {
+    for (const room of area.rooms || []) {
+      for (const [dir, tgt] of Object.entries(room.exits || {})) {
+        const t = (area.rooms || []).find(r => r.id === tgt);
+        if (t) { ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.x, -t.y); ctx.stroke(); }
+      }
+    }
+  }
+  for (const area of map.areas || []) {
+    for (const room of area.rooms || []) {
+      ctx.fillStyle = envColor(room.env, map.colors);
+      ctx.beginPath(); ctx.arc(room.x, -room.y, 0.38, 0, 7); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function fit() {
+  if (!map) return;
+  const pts = (map.areas || []).flatMap(a => a.rooms || []);
+  if (!pts.length) return;
+  const xs = pts.map(r => r.x), ys = pts.map(r => -r.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  view.scale = Math.max(2, Math.min(40, Math.min(W / (maxX - minX + 4), H / (maxY - minY + 4))));
+  view.x = -(minX + maxX) / 2 * view.scale;
+  view.y = -(minY + maxY) / 2 * view.scale;
+}
+
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (!drag) return; view.x += e.clientX - drag.x; view.y += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; draw(); });
+cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onerror = () => setStatus('read error', 'err');
+  if (/\.arkmap$/i.test(file.name)) {
+    reader.onload = () => {
+      try {
+        const { map: m, validation, checksums } = A.loadArkmap(reader.result);
+        map = m; emptyEl.style.display = 'none';
+        const rooms = (m.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
+        if (!validation.ok) setStatus(`${file.name} — ${validation.errors.length} validation error(s), first: ${validation.errors[0].path} ${validation.errors[0].msg}`, 'err');
+        else if (checksums.present && !checksums.ok) setStatus(`${file.name} — ${rooms} rooms — CHECKSUM MISMATCH`, 'err');
+        else if (checksums.present) setStatus(`${file.name} — ${rooms} rooms — checksums OK [v4]`, 'ok');
+        else setStatus(`${file.name} — ${rooms} rooms — no checksums in file`, 'warn');
+        fit(); draw();
+      } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); }
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = () => {
+      try {
+        map = A.datToArkmap(reader.result);
+        emptyEl.style.display = 'none';
+        const rooms = (map.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
+        setStatus(`${file.name} — ${rooms} rooms — .dat converted by arkmap`, 'ok');
+        fit(); draw();
+      } catch (e) { setStatus(`${file.name} — ${e.message}`, 'err'); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+document.getElementById('open').onclick = () => document.getElementById('file').click();
+document.getElementById('file').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+const dropEl = document.getElementById('drop');
+addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('on'); });
+addEventListener('dragleave', e => { if (e.relatedTarget === null) dropEl.classList.remove('on'); });
+addEventListener('drop', e => { e.preventDefault(); dropEl.classList.remove('on'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+resize();
+</script>
+</body>
+</html>

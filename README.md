@@ -271,9 +271,10 @@ Semantics worth knowing:
 ### Demo viewer
 
 A zero-build demo viewer (drag & drop a `.dat` / `.arkmap`, per-area and
-per-level navigation, validation and checksum status, fit-to-window button,
-room search with jump & highlight, and two-field Start/End route planning on
-top of `arkmap/graph`) lives in `docs/` and on
+per-level navigation, validation and checksum status — including per-line
+transport integrity, fit-to-window button, room search with jump & highlight,
+and two-field Start/End route planning with algorithm / direction-filter /
+transport-mode selects on top of `arkmap/graph`) lives in `docs/` and on
 [GitHub Pages](https://isithunzi000.github.io/arkmap/).
 
 ## Testing & guarantees

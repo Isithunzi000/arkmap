@@ -269,3 +269,24 @@ test('buildTransportEdges: loops and foreign rooms terminate the chain', () => {
   assert.equal(buildTransportEdges(null, idx, {}).size, 0);
   assert.equal(buildTransportEdges({}, idx, {}).size, 0);
 });
+
+// saveArkmap pipeline signs embedded transports; loadArkmap verifies them
+test('saveArkmap: embedded transports get signed; tamper detected after load', async () => {
+  const { createEmptyMap, saveArkmap, loadArkmap } = await import('../src/arkmap.js');
+  const m = createEmptyMap('T');
+  m.areas.push({ id: 1, name: 'T1', rooms: [
+    { id: 1, x: 0, y: 0, z: 0, name: 'a', env: 1, exits: { e: 2 } },
+    { id: 2, x: 1, y: 0, z: 0, name: 'b', env: 1, exits: { w: 1 } }] });
+  m.transports = doc([lineDef('ferry', [{ from: 1, to: 2, time: 5 }])]);
+  const { map: loaded } = loadArkmap(saveArkmap(m));
+  const v = verifyTransportChecksums(loaded);
+  assert.equal(v.present, true);
+  assert.equal(v.ok, true);
+  // determinism: identical input -> identical bytes (incl. transport sums)
+  assert.equal(saveArkmap(m), saveArkmap(structuredClone(m)));
+  // tamper after save
+  loaded.transports.lines[0].legs[0].time = 999;
+  const v2 = verifyTransportChecksums(loaded);
+  assert.equal(v2.ok, false);
+  assert.deepEqual(v2.badLines, ['ferry']);
+});

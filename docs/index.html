@@ -56,6 +56,16 @@
     <span class="rf"><input id="routeStart" placeholder="Start: name or #id…" autocomplete="off"><button class="clr" id="clrStart" title="clear start">×</button></span>
     <button class="btn mini" id="routeSwap" title="swap start and end">⇄</button>
     <span class="rf"><input id="routeEnd" placeholder="End: name or #id…" autocomplete="off"><button class="clr" id="clrEnd" title="clear end">×</button></span>
+    <button class="btn mini" id="routeClear" title="clear route and room highlight">Clear</button>
+    <select id="optAlgo" title="routing algorithm" style="max-width:none">
+      <option value="dijkstra">Dijkstra</option><option value="astar">A*</option>
+    </select>
+    <select id="optDir" title="direction filter" style="max-width:none">
+      <option value="all">all dirs</option><option value="cardinal">cardinal</option><option value="vertical">+vertical</option>
+    </select>
+    <select id="optTrans" title="transport lines" style="max-width:none">
+      <option value="off">no transports</option><option value="normal">transports</option><option value="aggressive">transports (aggr.)</option>
+    </select>
     <div id="routeResults"></div>
   </span>
   <span id="searchBox" hidden style="position:relative">
@@ -87,6 +97,7 @@ let routeStart = null;            // roomId — poczatek trasy (pole Start / uzb
 let routeEnd = null;              // roomId — koniec trasy (pole Koniec / uzbrojony klik)
 let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki
 let route = null;                 // [roomId, ...] — aktywna trasa
+let routeHops = null;             // [hop|null, ...] — metadane transportow per krok
 let armedField = null;            // 'start' | 'end' | null — pole czekajace na klik w pokoj
 let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
 
@@ -390,11 +401,22 @@ function setEndpoint(side, roomId) {
   recomputeRoute();
 }
 
+// transporty: osadzone w mapie (map.transports) maja pierszenstwo; dla mapy
+// Arkadii bez wlasnych linii dokladamy warstwe danych z pakietu
+function transportsFor() {
+  if (optTransEl.value === 'off' || !map) return null;
+  if (map.transports) return map.transports;
+  return A.isArkadiaMap(map) ? A.ARKADIA_TRANSPORTS : null;
+}
+
 function recomputeRoute() {
   if (routeStart != null && routeEnd != null && routeStart !== routeEnd) {
-    route = A.findPath(routeStart, routeEnd, roomIdx);
+    const r = A.findRoute(routeStart, routeEnd, roomIdx, {
+      algorithm: optAlgoEl.value, dirMode: optDirEl.value,
+      transportMode: optTransEl.value, transports: transportsFor() });
+    route = r.path; routeHops = r.hops;
   } else {
-    route = null;
+    route = null; routeHops = null;
   }
   routeStatus();
 }
@@ -402,7 +424,11 @@ function recomputeRoute() {
 function routeStatus() {
   if (routeStart == null || routeEnd == null) { setStatus(loadedMsg, loadedCls); return; }
   if (routeStart === routeEnd) setStatus('start = end — already there', 'ok');
-  else if (route) setStatus(`route: ${route.length - 1} step(s)`, 'ok');
+  else if (route) {
+    const hops = (routeHops || []).filter(Boolean);
+    const hopTxt = hops.length ? `, incl. ${hops.length} transport hop(s): ${[...new Set(hops.map(h => h.name))].join(', ')}` : '';
+    setStatus(`route: ${route.length - 1} step(s)${hopTxt}`, 'ok');
+  }
   else setStatus('no route between the selected rooms', 'warn');
 }
 
@@ -441,6 +467,8 @@ function jumpToRoom(roomId) {
 const searchEl = document.getElementById('search'), searchRes = document.getElementById('searchResults');
 const startEl = document.getElementById('routeStart'), endEl = document.getElementById('routeEnd');
 const routeRes = document.getElementById('routeResults'), routeBox = document.getElementById('routeBox');
+const optAlgoEl = document.getElementById('optAlgo'), optDirEl = document.getElementById('optDir'),
+      optTransEl = document.getElementById('optTrans');
 searchEl.addEventListener('input', () => {
   const hits = A.searchRooms(searchEl.value, map);
   if (!hits.length) { searchRes.style.display = 'none'; return; }
@@ -502,6 +530,20 @@ document.getElementById('routeSwap').onclick = () => {
   routeEnd = id; endEl.value = v;
   recomputeRoute(); draw();
 };
+// Clear: kasuje trase (pola + znaczniki) ORAZ podswietlenie pokoju z wyszukiwarki
+document.getElementById('routeClear').onclick = () => {
+  routeStart = routeEnd = route = routeHops = highlightRoom = null;
+  startEl.value = endEl.value = '';
+  disarm();
+  recomputeRoute(); draw();
+};
+for (const el of [optAlgoEl, optDirEl, optTransEl]) el.onchange = () => { recomputeRoute(); draw(); };
+// Escape poza polami tekstowymi kasuje podswietlenie pokoju (pola maja wlasne Escape)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && highlightRoom != null && !/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) {
+    highlightRoom = null; draw(); setStatus(loadedMsg, loadedCls);
+  }
+});
 
 document.addEventListener('click', (e) => {
   if (!searchRes.contains(e.target) && e.target !== searchEl) searchRes.style.display = 'none';
@@ -524,8 +566,9 @@ cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2,
 function afterLoad(msg, cls) {
   scope.z = null;   // nowa mapa -> populateSelectors wybierze domyslny (najludniejszy) poziom
   roomIdx = A.buildIndex(map);
-  routeStart = routeEnd = highlightRoom = route = null;
+  routeStart = routeEnd = highlightRoom = route = routeHops = null;
   startEl.value = endEl.value = '';
+  optAlgoEl.value = 'dijkstra'; optDirEl.value = 'all'; optTransEl.value = 'off';
   disarm();
   routeRes.style.display = 'none';
   loadedMsg = msg; loadedCls = cls;
@@ -560,12 +603,32 @@ function checksumStatus(fileName, rooms, cs) {
 }
 // ===CHECKSUM-STATUS-END===
 
+// Status integralnosci transportow (checksums.transports, klasa D2 — jak meta:
+// problem z transportami nigdy nie robi z 'ok' statusu 'err', tylko 'warn').
+// Zwraca { suffix, level } albo null (plik w ogole bez transportow).
+function transportStatus(m) {
+  const ts = A.verifyTransportChecksums(m);
+  if (!ts.present && !ts.unsigned) return null;                        // no transports at all
+  if (!ts.present) return { suffix: ` — transports: ${ts.lineCount} line(s), unsigned`, level: 'warn' };
+  if (ts.ok) return { suffix: ` — transports OK [${Object.keys(m.checksums.transports.lines).length} line(s)]`, level: 'ok' };
+  const probs = [];
+  if (ts.badLines?.length) probs.push(`${ts.badLines.length} line(s) modified (first: "${ts.badLines[0]}")`);
+  if (ts.missingLines?.length) probs.push(`${ts.missingLines.length} line(s) unsigned (first: "${ts.missingLines[0]}")`);
+  if (ts.extraLines?.length) probs.push(`${ts.extraLines.length} orphaned transport checksum(s) (lines removed)`);
+  return { suffix: ` — TRANSPORT CHECKSUM MISMATCH: ${probs.join('; ')}`, level: 'warn' };
+}
+
 function loadArkmapText(fileName, text) {
   const { map: m, validation, checksums } = A.loadArkmap(text);
   map = m;
   const rooms = (m.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
   if (!validation.ok) afterLoad(`${fileName} — ${validation.errors.length} validation error(s), first: ${validation.errors[0].path} ${validation.errors[0].msg}`, 'err');
-  else afterLoad(...checksumStatus(fileName, rooms, checksums));
+  else {
+    const [msg, cls] = checksumStatus(fileName, rooms, checksums);
+    const ts = transportStatus(m);
+    // transports moga tylko obnizyc 'ok' -> 'warn'; reszta statusow przechodzi bez zmian
+    afterLoad(ts ? msg + ts.suffix : msg, ts && cls === 'ok' ? ts.level : cls);
+  }
 }
 
 function loadDatBuffer(fileName, buf) {

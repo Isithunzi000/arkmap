@@ -8,6 +8,7 @@ import { validate } from './validate.js';
 import { addChecksums, verifyChecksums, _stripRoomDefaults } from './checksum.js';
 import { _canonicalizeMapForSave } from './canonicalize.js';
 import { stableStringify } from './stable-stringify.js';
+import { addTransportChecksums } from './transports.js';
 
 /**
  * Parse and validate .arkmap file text.
@@ -31,7 +32,9 @@ export function loadArkmap(text) {
  * Serialize a map object to canonical .arkmap file text.
  * The map is NOT mutated — serialization works on a deep clone:
  * canonicalize (sort areas/rooms/labels) → strip room defaults → add checksums
- * → stableStringify. Output is byte-deterministic for identical input.
+ * (rooms/areas/meta, plus per-line transport sums when the map embeds a
+ * map.transports document) → stableStringify. Output is byte-deterministic
+ * for identical input.
  * @param {object} map
  * @returns {string}
  */
@@ -41,7 +44,8 @@ export function saveArkmap(map) {
   for (const area of clone.areas || []) {
     for (const room of area.rooms || []) _stripRoomDefaults(room);
   }
-  addChecksums(clone);
+  addChecksums(clone);          // rebuilds the checksums envelope from scratch
+  if (clone.transports) addTransportChecksums(clone);   // then signs transports into it
   return stableStringify(clone);
 }
 

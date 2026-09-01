@@ -30,6 +30,15 @@ This package is the reference implementation of the `.arkmap` format; it is
 tested against Arkadia maps, and the format itself is game-agnostic — issues
 with maps from other MUDs are welcome.
 
+## Format specification
+
+The full `.arkmap` format specification is maintained in the ArkMap Studio
+repository (single source of truth):
+
+- [`.arkmap` format specification](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkmap_spec.html)
+  (rendered; [source](https://github.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/blob/main/docs/arkmap_spec.html))
+- [User manual](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkmap_manual.html)
+
 ## API
 
 ### .arkmap I/O

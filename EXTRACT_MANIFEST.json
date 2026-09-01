@@ -27,7 +27,7 @@
         4434,
         4798
       ],
-      "sha256": "34dd17e9a2c7055f51d24bd26c0aa5fa8815a40032d18fa463c5aa0aaa509d8d",
+      "sha256": "ee025fedfac1f6d599ba1e27c2b9be9fea4af2ce34239827990badb40b8503af",
       "note": "EN warning + error code for special-exit/direction overlap; err() accepts optional code (H0.3)"
     },
     "src/checksum.js": {

@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "source": {
     "repo": "Isithunzi000/arkadia-web_standalone-arkmap_studio",
     "file": "arkmap_studio.html",
@@ -7,88 +8,96 @@
   },
   "generated": {
     "src/constants.js": {
+      "status": "parity",
       "lines": [
         4234,
         4278
-      ],
-      "sha256": "08d214f2c02fed84c7cbb85c8760a867835185dfd6a655d35ede73fdd473998c"
+      ]
     },
     "src/arkadia.js": {
+      "status": "parity",
       "lines": [
         4279,
         4431
-      ],
-      "sha256": "37c43f6fe7b39b0af2c278d680ea7b47415a104d93280dd5dfd44da7090d7df4"
+      ]
     },
     "src/validate.js": {
+      "status": "maintained",
       "lines": [
         4434,
         4798
       ],
-      "sha256": "1e90048fd9e2d696a6779ff23a59293ac90a1b7f48e3fffb83a64889315c4b9c"
+      "sha256": "be3f2a06bf18a13a5ab661e1647f1d6bab4a1e3f1e4064dc6984ae5d95b4dc72",
+      "note": "EN warning + error code for special-exit/direction overlap; err() accepts optional code (H0.3)"
     },
     "src/checksum.js": {
+      "status": "maintained",
       "lines": [
         4799,
         5552
       ],
-      "sha256": "52b36ace0f64a392fb7181efbf0adea7a48f1e4522aa28b98ed54cb1994caee1"
+      "sha256": "5cc99e943fe08d00d942fb4ec3c6b3a208c54df0a92b27c2cbc1162b146122ce",
+      "note": "EN internal invariant message in _CanonBuf (H0.3)"
     },
     "src/mudlet-dat.js": {
+      "status": "maintained",
       "lines": [
         5553,
         6540
       ],
-      "sha256": "ed19331547d6c37b55d50d9466ce50e7bd9bfe73ab312bd6b1bda2b4cba17a8b"
+      "sha256": "b2c17947571c7c7509d762bb128e79093971385812aa306b07027adb3e602040",
+      "note": "EN error strings + DAT_* machine codes on all throw paths, EN import warnings (H0.3)"
     },
     "src/dat-to-arkmap.js": {
+      "status": "maintained",
       "lines": [
         6541,
         6769
       ],
-      "sha256": "7792a1834f62ee6572ab2fa9c484efe8dd28b7cb78065d640b9a48e48c8d41e2"
+      "sha256": "7ae7ce186c0820a22c54821a89125a70a6d1623f60eddbbbcf6fe771f0dd0eac",
+      "note": "EN error strings + DAT_* machine codes, EN import warnings (H0.3)"
     },
     "src/arkmap-to-dat.js": {
+      "status": "parity",
       "lines": [
         6770,
         6958
-      ],
-      "sha256": "a89edbd6a2dd43c5531911fb8ad0649ca1ba4dce57a73d615950ad7f9370f068"
+      ]
     },
     "src/ansi-pal.js": {
+      "status": "parity",
       "lines": [
         7201,
         7218
-      ],
-      "sha256": "b3613060c6b576637eebbff5732d2535189e1ed46e84c2bdfa7342a598fef766"
+      ]
     },
     "src/opposite.js": {
+      "status": "parity",
       "lines": [
         8049,
         8054
-      ],
-      "sha256": "1965d6373d89dc5005b148ef1406f7ca73fd09288b97ff9278510e2007a3178e"
+      ]
     },
     "src/stable-stringify.js": {
+      "status": "parity",
       "lines": [
         10512,
         10535
-      ],
-      "sha256": "c72ea149a158db4b0493e5c6e71b65ee269993716453cb4fc44957886dc7ecb5"
+      ]
     },
     "src/canonicalize.js": {
+      "status": "parity",
       "lines": [
         10590,
         10606
-      ],
-      "sha256": "4ef19bb68ed34146d3dd5ac25085afe0fb4aabea9d9057cec6109b74be31c3f2"
+      ]
     },
     "src/suppressors.js": {
+      "status": "parity",
       "lines": [
         19357,
         19413
-      ],
-      "sha256": "ae4769d5d23f10da1a716b8b6f65b4f475ad648e49304a4b94eb46218b671659"
+      ]
     }
   }
 }

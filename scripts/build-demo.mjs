@@ -37,7 +37,7 @@ globalThis.arkmap = {
   encodeRoute, decodeRoute, ROUTE_CODE_PREFIX, ROUTE_CODE_MAX, WP_MAX,
   diffMaps,
   buildSearchIndex, searchIndexed,
-  renderSvg, svgToPng,
+  renderSvg, svgToPng, renderPng,
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

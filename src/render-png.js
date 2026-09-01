@@ -5,13 +5,21 @@
 // svgToPng(svg, opts) -> Promise<Blob> ('image/png'). Browser-only: builds an
 // <img> from a Blob URL, draws it on a canvas and re-encodes. The SVG must be
 // self-contained (no external references, no foreignObject) — then the canvas
-// stays untainted and toBlob works. renderSvg() output qualifies.
+// stays untainted and toBlob works. renderSvg() output qualifies, including
+// mapLabels (pixmaps are embedded as data: URIs) and cross-area arrows.
 //
-// opts: { scale = 2 } — output resolution multiplier over the SVG's
-// width/height attributes.
+// renderPng(mapObj, opts) -> Promise<Blob> — one-call convenience:
+// renderSvg(mapObj, opts) + svgToPng. All renderSvg opts apply (areaId, z,
+// scale, background, labels, mapLabels, routes, markers); extra opt
+// pngScale (default 2) is the raster resolution multiplier.
+//
+// svgToPng opts: { scale = 2 } — output resolution multiplier over the
+// SVG's width/height attributes.
 //
 // Keep this file bundler-friendly for scripts/build-demo.mjs:
 // plain function/const declarations, single-line imports, one-line export list.
+
+import { renderSvg } from './render-svg.js';
 
 async function svgToPng(svg, opts) {
   const o = opts || {};
@@ -42,4 +50,9 @@ async function svgToPng(svg, opts) {
   }
 }
 
-export { svgToPng };
+async function renderPng(mapObj, opts) {
+  const o = opts || {};
+  return svgToPng(renderSvg(mapObj, o), { scale: o.pngScale || 2 });
+}
+
+export { svgToPng, renderPng };

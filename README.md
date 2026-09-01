@@ -1,9 +1,11 @@
 # arkmap
 
-**arkmap** is a toolkit for working with MUD maps in JavaScript — Node.js and
-the browser. It reads, writes, validates, and converts between the two map
-formats used in the Mudlet ecosystem: the binary Mudlet `.dat` and the JSON
-`.arkmap` format. On top of plain I/O it adds structural validation, canonical
+**arkmap** is a toolkit for MUD map files in JavaScript — Node.js and the
+browser. It provides full support for Mudlet's native binary map format
+(`.dat` — read, write, convert both ways) and acts as a bridge to **`.arkmap`**
+— this project's own JSON map format for MUD games. `.arkmap` is not a Mudlet
+format; it keeps everything `.dat` carries and adds what `.dat` cannot
+express. On top of plain I/O the toolkit adds structural validation, canonical
 deterministic serialization, and content-integrity checksums (XXH3-64, `v4`).
 
 Zero dependencies. ESM only. Node ≥ 18 and modern browsers.
@@ -29,9 +31,10 @@ const text = saveArkmap(map);
 
 ## The .arkmap format
 
-`.arkmap` is a JSON map format for Mudlet-style maps: areas, rooms, exits,
-doors, labels, custom exit lines, environments, and user data — everything the
-binary `.dat` carries, plus things `.dat` cannot express.
+`.arkmap` is our own JSON map format for MUD games (introduced by ArkMap
+Studio, specified openly): areas, rooms, exits, doors, labels, custom exit
+lines, environments, user data, and transport lines — everything the native
+Mudlet `.dat` carries, plus things `.dat` cannot express.
 
 Why use it instead of raw `.dat`:
 
@@ -44,6 +47,8 @@ Why use it instead of raw `.dat`:
   by every language with a JSON parser.
 - **Extensible** — `meta` and `user_data` fields carry data the `.dat` format
   has no place for, without breaking anything.
+- **Routing data on board** — named transport lines (`transports`) with
+  per-line integrity sums ride inside the map file; `.dat` cannot express them.
 - **Faithful bridge** — `.dat` → `.arkmap` conversion is lossless, so the
   binary world and the JSON world stay in sync.
 
@@ -57,7 +62,7 @@ Full format documentation (maintained alongside ArkMap Studio):
 ### Repository layout
 
 ```
-src/            library modules (constants, codecs, validation, checksums, converters, graph)
+src/            library modules (constants, codecs, validation, checksums, converters, graph/routing, transports, waypoints, diff)
 scripts/        extract.mjs (module pipeline), run-tests.mjs, build-demo.mjs
 tests/          node:test suites + golden fixtures and oracle vectors
 docs/           demo viewer (GitHub Pages) + prebuilt browser bundle

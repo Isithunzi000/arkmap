@@ -509,6 +509,7 @@ function pickRoom(e) {
   } else {
     const e2 = roomIdx.get(best.id);
     openRoomPanel(best.id);
+    searchEl.value = best.name || String(best.id);   // pokoj wpisany do szukajki jak recznie
     setStatus(`${best.name || 'room'} (#${best.id}) — ${e2 ? e2.areaName : '?'}, z=${best.z ?? 0}`, '');
   }
   draw();

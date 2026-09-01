@@ -27,7 +27,7 @@
         4434,
         4798
       ],
-      "sha256": "be3f2a06bf18a13a5ab661e1647f1d6bab4a1e3f1e4064dc6984ae5d95b4dc72",
+      "sha256": "34dd17e9a2c7055f51d24bd26c0aa5fa8815a40032d18fa463c5aa0aaa509d8d",
       "note": "EN warning + error code for special-exit/direction overlap; err() accepts optional code (H0.3)"
     },
     "src/checksum.js": {
@@ -36,7 +36,7 @@
         4799,
         5552
       ],
-      "sha256": "5cc99e943fe08d00d942fb4ec3c6b3a208c54df0a92b27c2cbc1162b146122ce",
+      "sha256": "f1655591f4e24fbf77e19812969ff8caad658bbccf0ca15e9425d643d40ecd13",
       "note": "EN internal invariant message in _CanonBuf (H0.3)"
     },
     "src/mudlet-dat.js": {
@@ -45,7 +45,7 @@
         5553,
         6540
       ],
-      "sha256": "b2c17947571c7c7509d762bb128e79093971385812aa306b07027adb3e602040",
+      "sha256": "8c0b4c1436e11ed6dc4fd970ff69aa90f83ea84fe6cd7d4a9a7b623d27690db3",
       "note": "EN error strings + DAT_* machine codes on all throw paths, EN import warnings (H0.3)"
     },
     "src/dat-to-arkmap.js": {
@@ -54,7 +54,7 @@
         6541,
         6769
       ],
-      "sha256": "7ae7ce186c0820a22c54821a89125a70a6d1623f60eddbbbcf6fe771f0dd0eac",
+      "sha256": "488513f5509a8c780b1ef1e7023fdfb08c143ad048fea461f688c083949b3402",
       "note": "EN error strings + DAT_* machine codes, EN import warnings (H0.3)"
     },
     "src/arkmap-to-dat.js": {

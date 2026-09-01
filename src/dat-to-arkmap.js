@@ -8,19 +8,19 @@ import { isArkadiaMap } from './arkadia.js';
 import { readMudletDat, uint8ToBase64 } from './mudlet-dat.js';
 
 // ── dat-to-arkmap.js ──
-// Konwertuje Mudlet .dat (ArrayBuffer) → .arkmap JSON.
-// Wersja przeglądarkowa — używa mudlet_dat.js (bez Node.js/require).
+// Converts Mudlet .dat (ArrayBuffer) -> .arkmap JSON.
+// Browser version — uses mudlet_dat.js (no Node.js/require).
 
 
-// ─── hexToRgb / rgbToHex — konwersja kolorów (Pass 67) ──────────────────────
-// hexToRgb('#rrggbb') → [r, g, b]   — używana przy zmianie koloru CL/etykiety
+// ─── hexToRgb / rgbToHex — color conversion (Pass 67) ───────────────────────
+// hexToRgb('#rrggbb') -> [r, g, b]   — used when changing CL/label colors
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return [r, g, b];
 }
-// rgbToHex([r,g,b]) → '#rrggbb'     — używana do wypełnienia input type="color"
+// rgbToHex([r,g,b]) -> '#rrggbb'     — used to fill input type="color"
 function rgbToHex(arr) {
   return '#' + arr.slice(0, 3).map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
 }
@@ -93,7 +93,7 @@ function _datConvertRoom(raw, hashLookup) {
   const exitWeights = {};
   for (const [dir, w] of Object.entries(raw.exitWeights || {})) {
     const key = DIR_BY_LONG[dir] ? DIR_BY_LONG[dir].short : dir;
-    // audyt A3: waga 1 jest znacząca — w Mudlecie brak wpisu oznacza wagę 0, więc jawna 1 musi przetrwać round-trip
+    // audit A3: weight 1 is significant — in Mudlet a missing entry means weight 0, so an explicit 1 must survive the round-trip
     if (exits[key] !== undefined || specialExits[key] !== undefined || specialExits[dir] !== undefined)
       exitWeights[key] = w;
   }
@@ -104,14 +104,14 @@ function _datConvertRoom(raw, hashLookup) {
   )];
   if (exitLocks.length) room.exit_locks = exitLocks;
 
-  // Zachowaj wszystkie drzwi — Mudlet dopuszcza drzwi w kierunkach spoza exits/stubs
+  // Keep all doors — Mudlet allows doors in directions outside exits/stubs
   if (Object.keys(rawDoors).length) room.doors = rawDoors;
 
   if (raw.userData && Object.keys(raw.userData).length) room.user_data = raw.userData;
 
-  // audyt T3/W4: hidden (v22+ z pola; v20 z konwencji user_data) — utrzymać w modelu
+  // audit T3/W4: hidden (v22+ from the field; v20 from the user_data convention) — keep in the model
   if (raw.hidden || raw.userData?.['system.hidden'] === '1') room.hidden = true;
-  // audyt T3/Q2: v21+ symbolColor → konwencja fallback (lustro zapisu writeMudletRoom)
+  // audit T3/Q2: v21+ symbolColor -> fallback convention (mirror of writeMudletRoom)
   if (raw.symbolColor && raw.symbolColor.spec > 0) {
     const ud = room.user_data || (room.user_data = {});
     if (!ud['system.fallback_symbol_color']) {
@@ -124,9 +124,9 @@ function _datConvertRoom(raw, hashLookup) {
   for (const [dir, points] of Object.entries(raw.customLines || {})) {
     if (!Array.isArray(points)) continue; // skip null/invalid non-array entries; empty arrays (suppressors) pass through
     const key = DIR_BY_LONG[dir] ? DIR_BY_LONG[dir].short : dir;
-    const entry = { points: points.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]) }; // r4: Mudlet i tak zaokrągla do pikseli
+    const entry = { points: points.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]) }; // r4: Mudlet rounds to pixels anyway
     const color = raw.customLinesColor?.[dir];
-    entry.color = color ? [color.r, color.g, color.b] : [255, 0, 0]; // default Mudleta: czerwony
+    entry.color = color ? [color.r, color.g, color.b] : [255, 0, 0]; // Mudlet default: red
     const style = raw.customLinesStyle?.[dir];
     if (style && LINE_STR[style] && LINE_STR[style] !== 'solid') entry.style = LINE_STR[style];
     if (raw.customLinesArrow?.[dir]) entry.arrow = true;
@@ -149,7 +149,7 @@ function _datConvertLabel(raw) {
   return label;
 }
 
-// v1.43.3: neutralny fallback nazwy mapy — 'Arkadia' tylko dla map arkadianskich
+// v1.43.3: neutral map-name fallback — 'Arkadia' only for Arkadian maps
 function _datFallbackMapName(raw) {
   const probe = {
     meta:   { user_data: raw.mUserData || {} },
@@ -161,7 +161,7 @@ function _datFallbackMapName(raw) {
 function datToArkmap(arrayBuffer) {
   const raw = readMudletDat(arrayBuffer);
 
-  // Obsługa błędów parsera (nieznana wersja, zbyt stary/nowy plik)
+  // Parser error handling (unknown version, file too old/new)
   if (raw.error) {
     const err = new Error(raw.message || `arkmap: unsupported Mudlet DAT format (version ${raw.version})`);
     err.code = 'DAT_UNSUPPORTED_VERSION';
@@ -171,8 +171,8 @@ function datToArkmap(arrayBuffer) {
   const hashLookup = {};
   for (const [hash, id] of Object.entries(raw.mpRoomDbHashToRoomId || {})) hashLookup[id] = hash;
 
-  // audyt ext F2.10: ciche gubienie pokoi → warningi importu (wspolny kanal z F2.9)
-  // Arc 37: zbiór `referenced` usunięty — orphan liczony po fladze _roomId (patrz niżej).
+  // audit ext F2.10: silently lost rooms -> import warnings (shared channel with F2.9)
+  // Arc 37: the `referenced` set removed — orphans counted via the _roomId flag (see below).
   const importWarnings = [...(raw.importWarnings || [])];
 
   const areas = [];
@@ -184,9 +184,9 @@ function datToArkmap(arrayBuffer) {
     if (rawArea.zoneAreaRef !== 0) area.zone_area_ref = rawArea.zoneAreaRef;
     if (rawArea.userData && Object.keys(rawArea.userData).length) area.user_data = rawArea.userData;
     if (rawArea.pos && (rawArea.pos[0] || rawArea.pos[1] || rawArea.pos[2]))
-      area.pos = [rawArea.pos[0], rawArea.pos[1], rawArea.pos[2]]; // pozycja obszaru na overview mapie
+      area.pos = [rawArea.pos[0], rawArea.pos[1], rawArea.pos[2]]; // area position on the overview map
 
-    let _missing = 0;  // audyt ext F2.10
+    let _missing = 0;  // audit ext F2.10
     area.rooms = rawArea.rooms.map(roomId => {
       const r = raw.rooms[roomId]; if (!r) { _missing++; return null; }
       r._roomId = roomId;
@@ -201,11 +201,11 @@ function datToArkmap(arrayBuffer) {
   }
   areas.sort((a, b) => a.id - b.id);
 
-  // audyt ext F2.10: rekordy pokoi niewymienione w zadnym obszarze (orphans).
-  // Arc 37: pętla konwersji wyżej ustawia r._roomId na KAŻDYM rekordzie użytym w obszarze,
-  // więc orphan = rekord bez flagi — jeden przebieg zamiast Set + filter (regresja parse
-  // +59% przy 16x z benchmarku 2026-08-26). Zapis raw._roomId w builderze eksportu (~6642)
-  // dotyczy innego obiektu (inny cykl życia) — brak kolizji semantycznej.
+  // audit ext F2.10: room records not listed in any area (orphans).
+  // Arc 37: the conversion loop above sets r._roomId on EVERY record used in an area,
+  // so orphan = record without the flag — one pass instead of Set + filter (parse
+  // regression +59% at 16x in the 2026-08-26 benchmark). The raw._roomId write in the export
+  // builder (~6642) concerns a different object (different lifecycle) — no semantic collision.
   let _orphans = 0;
   for (const rid in raw.rooms) if (raw.rooms[rid]._roomId === undefined) _orphans++;
   if (_orphans) importWarnings.push(`${_orphans} room records outside area lists — skipped (orphan)`);
@@ -231,7 +231,7 @@ function datToArkmap(arrayBuffer) {
     },
     areas,
   };
-  // audyt ext F2.9/F2.10: warningi importu POZA modelem — nieenumerowalne (zero smieci w zapisie)
+  // audit ext F2.9/F2.10: import warnings live OUTSIDE the model — non-enumerable (zero garbage in saves)
   if (importWarnings.length)
     Object.defineProperty(map, '_importWarnings', { value: importWarnings, enumerable: false, configurable: true });
   return map;

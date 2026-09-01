@@ -7,8 +7,8 @@ import { ansiPaletteRgb } from './ansi-pal.js';
 import { writeMudletDat, base64ToUint8 } from './mudlet-dat.js';
 
 // ── arkmap-to-dat.js ──
-// Konwertuje .arkmap JSON → Mudlet map.dat (Uint8Array).
-// Wersja przeglądarkowa — używa mudlet_dat.js (bez Node.js/require).
+// Converts .arkmap JSON -> Mudlet map.dat (Uint8Array).
+// Browser version — uses mudlet_dat.js (no Node.js/require).
 
 
 function toQColor(arr, defaultAlpha = 255) {
@@ -44,7 +44,7 @@ function buildRoom(room, areaId) {
     weight: room.weight ?? 1, name: room.name ?? '', isLocked: room.locked ?? false,
     symbol: room.symbol ?? '', userData: room.user_data ?? {},
   };
-  if (room.hidden) out.hidden = true;  // audyt T3/W4: hidden idzie do raw — writeMudletRoom zapisze je w userData (v20 nie ma pola)
+  if (room.hidden) out.hidden = true;  // audit T3/W4: hidden goes to raw — writeMudletRoom writes it to userData (v20 has no field)
   for (const { short, long } of DIRS) out[long] = room.exits?.[short] ?? -1;
 
   out.doors = {};
@@ -53,7 +53,7 @@ function buildRoom(room, areaId) {
   out.stubs = (room.stubs || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
   out.exitWeights = {};
   for (const [key, w] of Object.entries(room.exit_weights || {})) {
-    const nk = DIR_BY_LONG[key] ? DIR_BY_LONG[key].short : key;  // audyt T4: symetria z konwerterem — long-name nie trafia do .dat
+    const nk = DIR_BY_LONG[key] ? DIR_BY_LONG[key].short : key;  // audit T4: symmetry with the converter — long names do not go into .dat
     out.exitWeights[nk] = w;
   }
   out.exitLocks = (room.exit_locks || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
@@ -66,14 +66,14 @@ function buildRoom(room, areaId) {
     out.rawSpecialExits[targetId].push(prefix + cmd);
   }
   out.mSpecialExits = room.special_exits ?? {};
-  out.mSpecialExitLocks = [...(room.special_exit_locks || [])];  // audyt T4/C-locks: semantyka v21 = lista KOMEND (stringow); sciezka rekonstrukcji writera robi lockSet.has(cmd) — wczesniej szukala stringow wsrod roomId (mina latentna)
+  out.mSpecialExitLocks = [...(room.special_exit_locks || [])];  // audit T4/C-locks: v21 semantics = a list of COMMANDS (strings); the writer reconstruction path does lockSet.has(cmd) — it used to look for strings among roomIds (latent mine)
 
   out.customLines = {}; out.customLinesArrow = {};
   out.customLinesColor = {}; out.customLinesStyle = {};
   for (const [key, cl] of Object.entries(room.custom_lines || {})) {
     out.customLines[key]      = (cl.points || []).map(p => [p[0], p[1]]);
     out.customLinesArrow[key] = cl.arrow ?? false;
-    out.customLinesColor[key] = toQColor(cl.color || [255, 0, 0]);  // audyt D-C1: default red per .arkmap spec (reader datToArkmap tez daje [255,0,0])
+    out.customLinesColor[key] = toQColor(cl.color || [255, 0, 0]);  // audit D-C1: default red per .arkmap spec (the datToArkmap reader also yields [255,0,0])
     out.customLinesStyle[key] = LINE_INT[cl.style] ?? LINE_INT.solid;
   }
   if (room.hash) out._hash = room.hash;
@@ -136,11 +136,11 @@ function arkmapToDat(arkmap) {
     labels[areaId] = (area.labels || []).map(buildLabel);
   }
 
-  // areaNames[-1] = nazwa mapy (z arkmap, nie nadpisuj meta.map_name)
-  // Obszar -1 to "Default Area" w Mudlet – musi być zachowany z arkmap.areas
-  // Nadpisanie tutaj powodowało błędną nazwę po roundtrip
+  // areaNames[-1] = map name (from arkmap; do not overwrite meta.map_name)
+  // Area -1 is "Default Area" in Mudlet — it must be preserved from arkmap.areas
+  // Overwriting it here produced a wrong name after the round-trip
 
-  // mAreaExits (wyjścia między obszarami)
+  // mAreaExits (exits between areas)
   // Mudlet format: QMultiMap<int srcRoomId, QPair<int targetRoomId, int dirCode>>
   // dirCode: 1–12 = standard (DIRS[].idx), 13 = DIR_OTHER (special exit)
   for (const [areaId, rawArea] of Object.entries(areas)) {
@@ -174,9 +174,9 @@ function arkmapToDat(arkmap) {
       Object.entries(arkmap.colors?.custom_env_colors ?? {})
         .filter(([k, v]) => {
           const id = parseInt(k);
-          // envId poza zakresem ANSI 1-255 → zawsze custom
+          // envId outside the ANSI 1-255 range -> always custom
           if (id < 1 || id > 255) return true;
-          // envId w zakresie 1-255: includue tylko jeśli wartość różni się od standardowej palety ANSI
+          // envId in 1-255: include only if the value differs from the standard ANSI palette
           const ansi = ansiPaletteRgb(id);
           if (!ansi) return true;
           const arr = Array.isArray(v) ? v : [v.r ?? 0, v.g ?? 0, v.b ?? 0];

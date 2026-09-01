@@ -7,7 +7,7 @@
 
 // ── constants.js ──
 // Standard exit directions: shorthand -> full name and Mudlet 1-based index
-// Kolejność zgodna z Mudlet TMap.h DIR_ stałymi:
+// Order matching the Mudlet TMap.h DIR_ constants:
 // DIR_NORTH=1, DIR_NORTHEAST=2, DIR_NORTHWEST=3, DIR_EAST=4,
 // DIR_WEST=5,  DIR_SOUTH=6,    DIR_SOUTHEAST=7, DIR_SOUTHWEST=8,
 // DIR_UP=9,    DIR_DOWN=10,    DIR_IN=11,        DIR_OUT=12
@@ -41,13 +41,13 @@ const LINE_INT = { solid: 1, dash: 2, dot: 3, dash_dot: 4, dash_dot_dot: 5 };
 const LINE_STR = Object.fromEntries(Object.entries(LINE_INT).map(([k, v]) => [v, k]));
 
 const FORMAT         = 'arkmap';
-const FORMAT_VERSION = 2;   // koperta v2 (D1): format_version + checksums na top-level; pliki v1 odrzucane
-// P-LOCK-3: komplet kluczy top-level koperty v2 (spec §: areas/checksums/colors/
-// format/format_version/meta). Obce klucze sa zachowywane (D3), ale sygnalizowane przy loadzie.
+const FORMAT_VERSION = 2;   // v2 envelope (D1): format_version + checksums at top level; v1 files rejected
+// P-LOCK-3: complete set of v2-envelope top-level keys (spec: areas/checksums/colors/
+// format/format_version/meta). Foreign keys are preserved (D3) but flagged on load.
 const _ARKMAP_TOP_KEYS = new Set(['format', 'format_version', 'meta', 'colors', 'areas', 'checksums']);
 
-// (CRC-32 usunięte w v1.45.0 — jedyny konsument (sumy .arkdelta) zmigrowany na XXH3-64,
-//  zunifikowany z silnikiem sum .arkmap; stableStringify pozostaje kanonizacją treści kalki)
+// (CRC-32 removed in v1.45.0 — the only consumer (.arkdelta checksums) migrated to XXH3-64,
+//  unified with the .arkmap checksum engine; stableStringify remains the delta-content canonization)
 
 
 // ── src/arkadia.js ──
@@ -59,14 +59,14 @@ const _ARKMAP_TOP_KEYS = new Set(['format', 'format_version', 'meta', 'colors', 
 /**
  * arkadia-env.js
  *
- * Słownik środowisk (envId → kolor + nazwa) i symboli pokoi dla świata Arkadia.
- * Wyprowadzony z projektu arkadia-crowdmap (Delwing/Dargoth) — de facto standard
- * używany przez kartografów Arkadii od lat.
+ * Dictionary of environments (envId -> color + name) and room symbols for the
+ * Arkadia world. Derived from the arkadia-crowdmap project (Delwing/Dargoth) —
+ * the de facto standard used by Arkadia cartographers for years.
  *
- * Źródło: draw_tools/gui/mapper tools.lua z arkadia-crowdmap-master
+ * Source: draw_tools/gui/mapper tools.lua from arkadia-crowdmap-master
  */
 
-// ─── ŚRODOWISKA ───────────────────────────────────────────────────────────────
+// ─── ENVIRONMENTS ─────────────────────────────────────────────────────────────
 // Mapa envId → { name, rgb: [r,g,b] }
 // envId pochodzi z Mudlet (getCustomEnvColorTable / setRoomEnv)
 
@@ -80,7 +80,7 @@ const ARKADIA_ENVS = {
   259: { name: 'env 259',            rgb: [128, 128, 0]   },
   260: { name: 'env 260',            rgb: [0,   0,   128] },
   261: { name: 'Bez światła',         rgb: [128, 0,   128] },
-  262: { name: 'Wieś / Lok. łączona 2', rgb: [0,   128, 128] }, // env 262 używany dla Wieś i Lok. łączona 2
+  262: { name: 'Wieś / Lok. łączona 2', rgb: [0,   128, 128] }, // env 262 used for both Wies and Lok. laczona 2
   263: { name: 'env 263',             rgb: [192, 192, 192] },
   264: { name: 'env 264',             rgb: [36,  36,  36]  },
   265: { name: 'env 265',             rgb: [255, 0,   0]   },
@@ -124,9 +124,9 @@ const ARKADIA_ENVS = {
   855: { name: 'env 855',             rgb: [160, 82,  45]  },
 };
 
-// ─── SYMBOLE POKOJÓW ─────────────────────────────────────────────────────────
+// ─── ROOM SYMBOLS ────────────────────────────────────────────────────────────
 // Mapa symbol → opis (de facto standard arkadyjski, z crowdmap)
-// roomChar / symbol w Mudlet to krótki string wyświetlany na mapie
+// roomChar / symbol in Mudlet is a short string displayed on the map
 
 const ARKADIA_SYMBOLS = {
   'P':  'Poczta',
@@ -154,7 +154,7 @@ const ARKADIA_SYMBOLS = {
   '+':  'Świątynia / kapliczka',
 };
 
-// Domyślne środowisko dla symbolu (>75% dominacji w mapie Arkadii + Zielarz)
+// Default environment for a symbol (>75% dominance in the Arkadia map + Zielarz)
 const SYMBOL_DEFAULT_ENV = {
   'P': 269, 'K': 266, 'S': 295, 's': 295, 'Z': 258,
   'r': 295, 'T': 295, 'p': 295, 'a': 295, 'm': 295,
@@ -164,7 +164,7 @@ const SYMBOL_DEFAULT_ENV = {
 
 /**
 /**
- * Tablica środowisk jako lista do palety (sortowana po nazwie).
+ * Environment table as a palette list (sorted by name).
  * @returns {{ envId: number, name: string, rgb: number[] }[]}
  */
 function envPaletteList() {
@@ -180,13 +180,13 @@ const ARKADIA_ENV = Object.fromEntries(
   envPaletteList().map(e => [e.envId, { name: e.name, rgb: e.rgb }])
 );
 
-// ── Detekcja Arkadii (v1.43.3) ──────────────────────────────────────────────
-// Mapy niosa wlasne kolory srodowisk (.dat v17+ w mCustomEnvColors / .arkmap
-// colors.*), wiec tabela ARKADIA_ENVS/ARKADIA_SYMBOLS to override TYLKO dla map
-// arkadianskich. true gdy: user_data.map_sync_version (marka mapsync) LUB
-// 'arkadia' w nazwie mapy/pliku LUB >=2 sygnaturowe envId (>255, z tabeli)
-// wsrod uzywanych envow pokoi albo kluczy kolorow z pliku. Czysta funkcja
-// danych — ta sama mapa daje zawsze ten sam wynik.
+// ── Arkadia detection (v1.43.3) ─────────────────────────────────────────────
+// Maps carry their own environment colors (.dat v17+ in mCustomEnvColors / .arkmap
+// colors.*), so the ARKADIA_ENVS/ARKADIA_SYMBOLS table is an override ONLY for
+// Arkadian maps. true when: user_data.map_sync_version (mapsync mark) OR
+// 'arkadia' in the map/file name OR >=2 signature envIds (>255, from the table)
+// among the room envs in use or the file's color keys. A pure function of the
+// data — the same map always gives the same result.
 const ARKADIA_SIGNATURE_ENVS = Object.keys(ARKADIA_ENVS).map(Number).filter(k => k > 255);
 function isArkadiaMap(map, filename) {
   if (!map || typeof map !== 'object') return false;
@@ -1651,13 +1651,13 @@ const OPPOSITE = {
 
 // ── mudlet_dat.js ──
 /**
- * mudlet_dat.js — pełny port binarnego formatu Mudlet map.dat dla przeglądarki.
+ * mudlet_dat.js — full port of the Mudlet map.dat binary format for the browser.
  *
- * Format oparty na Qt QDataStream (big-endian).
- * Brak zależności zewnętrznych — działa w przeglądarce i Node.js.
+ * Format based on Qt QDataStream (big-endian).
+ * No external dependencies — runs in the browser and Node.js.
  *
- * Export:
- *   readMudletDat(arrayBuffer)  → raw map object (identyczny z mudlet_reader.read)
+ * Exports:
+ *   readMudletDat(arrayBuffer)  → raw map object (identical to mudlet_reader.read)
  *   writeMudletDat(mapObj)      → Uint8Array
  */
 
@@ -1673,8 +1673,8 @@ class ReadBuffer {
     this.view = new DataView(this.buf);
     this.pos  = 0;
   }
-  // audyt A7: bounds-check przed każdym odczytem — kontrolowany błąd formatu zamiast surowego
-  // RangeError (trafia do toastu przez catch w loadDat); pos zostaje nienaruszony przy rzuceniu
+  // audit A7: bounds-check before every read — a controlled format error instead of a raw
+  // RangeError (reaches the toast via catch in loadDat); pos stays untouched when throwing
   _need(n) {
     if (n < 0 || n > this.remaining()) {
       const err = new Error(`arkmap: corrupt or truncated .dat: read of ${n} B at offset ${this.pos}, file is ${this.buf.byteLength} B`);
@@ -1766,8 +1766,8 @@ function writeQColor(w, c) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // QFont — Qt font descriptor
-//   NOTE: stretch jest zapisywany z przesunięciem o 8 bitów (<< 8) — zachowujemy
-//         to zachowanie (błąd w oryginalnym mudlet_reader.js, ale kompatybilny).
+//   NOTE: stretch is written shifted by 8 bits (<< 8) — we preserve this
+//         behavior (a bug in the original mudlet_reader.js, but compatible).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQFont(r) {
@@ -1780,7 +1780,7 @@ function readQFont(r) {
   r.readInt8();                          // padding byte
   const weight        = r.readUInt8();
   const fontBits      = r.readUInt8();
-  const stretch       = r.readUInt16(); // raw — w pliku Mudlet: wartość prosta, po zapisu przez nas: stretch<<8
+  const stretch       = r.readUInt16(); // raw — in a Mudlet file: plain value; after we write it: stretch<<8
   const extFontBits   = r.readUInt8();
   const letterSpacing = r.readInt32();
   const wordSpacing   = r.readInt32();
@@ -1815,7 +1815,7 @@ function writeQFont(w, f) {
   w.writeZero(1);                                      // padding
   w.writeUInt8( o.weight          ?? 0);
   w.writeUInt8( o.fontBits        ?? 0);
-  w.writeUInt16((o.stretch        ?? 100) << 8);       // oryginalny bug — zachowany
+  w.writeUInt16((o.stretch        ?? 100) << 8);       // original bug — preserved
   w.writeUInt8( o.extendedFontBits ?? 0);
   w.writeInt32( o.letterSpacing   ?? 0);
   w.writeInt32( o.wordSpacing     ?? 0);
@@ -1824,7 +1824,7 @@ function writeQFont(w, f) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QPoint (para double) i QVector (trójka double)
+// QPoint (pair of doubles) and QVector (triple of doubles)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQPoint(r)  { return [r.readDouble(), r.readDouble()]; }
@@ -1837,24 +1837,24 @@ function writeQVector(w, v) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QPixMap — zawiera dane PNG lub jest pusty
+// QPixMap — holds PNG data or is empty
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQPixMap(r) {
-  r.readUInt32();                         // nagłówkowy uint32 (zawsze 1 lub ignorowany)
+  r.readUInt32();                         // header uint32 (always 1 or ignored)
   const startPos = r.pos;
   if (r.remaining() < 8) return new Uint8Array(0);
 
-  // audyt A9: pełna 8-bajtowa sygnatura PNG + parsowanie chunków zamiast skanowania bajtów za IEND
+  // audit A9: full 8-byte PNG signature + chunk parsing instead of scanning bytes past IEND
   const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
   for (const s of sig) {
-    if (r.readUInt8() !== s) { r.pos = startPos; return new Uint8Array(0); }  // nie PNG — cofnij
+    if (r.readUInt8() !== s) { r.pos = startPos; return new Uint8Array(0); }  // not a PNG — rewind
   }
 
-  // Chunki: uint32 length BE | typ 4 B | data(length) | CRC 4 B; koniec na IEND.
-  // Bajty "IEND" wewnątrz danych IDAT nie mylą parsera (dawniej ucinały pixmapę).
-  // Uszkodzony/ucięty chunk → kontrolowany błąd przez _need (audyt A7) — pozycja strumienia
-  // byłaby nieodwracalna, więc ciche pochłanianie reszty pliku (dawne zachowanie) było gorsze.
+  // Chunks: uint32 length BE | type 4 B | data(length) | CRC 4 B; ends at IEND.
+  // "IEND" bytes inside IDAT data do not confuse the parser (they used to truncate the pixmap).
+  // A corrupt/truncated chunk -> controlled error via _need (audit A7) — the stream position
+  // would be unrecoverable, so silently swallowing the rest of the file (old behavior) was worse.
   for (;;) {
     const len = r.readUInt32();
     const t0 = r.readUInt8(), t1 = r.readUInt8(), t2 = r.readUInt8(), t3 = r.readUInt8();
@@ -1865,17 +1865,17 @@ function readQPixMap(r) {
 
   const endPos = r.pos;
   r.pos = startPos;
-  return r.readBytes(endPos - startPos).slice();  // kopia PNG
+  return r.readBytes(endPos - startPos).slice();  // PNG copy
 }
 
 function writeQPixMap(w, bytes) {
-  w.writeUInt32(1);                       // nagłówkowy uint32
+  w.writeUInt32(1);                       // header uint32
   if (bytes && bytes.length > 0) w.writeBytes(bytes);
-  // puste: tylko uint32(1), przy odczycie brak PNG → pusty
+  // empty: only uint32(1); on read, no PNG -> empty
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Pomocnicze sortowanie kluczy całkowitych
+// Integer-key sorting helper
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function cmpInt(a, b) { return parseInt(a[0]) - parseInt(b[0]); }
@@ -1887,18 +1887,18 @@ function cmpIntMinusFirst(a, b) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QMap / QMultiMap — różne warianty typów kluczy i wartości
+// QMap / QMultiMap — various key/value type combinations
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// audyt ext F2.8: liczniki sekcji czytane jako int32 (ze znakiem) — ujemny = uszkodzony
-// plik, NIE „pusta sekcja". Liczniki uint32 (QMap/QList) ujemne byc nie moga; skorumpowane
-// wielkie wartosci i tak koncza sie kontrolowanym bledem bounds-checku ReadBuffer (audyt A7).
+// audit ext F2.8: section counters are read as int32 (signed) — negative = corrupt
+// file, NOT an "empty section". uint32 counters (QMap/QList) cannot be negative; corrupted
+// huge values end in a controlled ReadBuffer bounds-check error anyway (audit A7).
 function _datCounter(n) {
   if (n < 0) { const err = new Error('arkmap: corrupt .dat (negative section count)'); err.code = 'DAT_NEGATIVE_COUNT'; throw err; }
   return n;
 }
 
-// QMap<QInt, QInt> — np. envColors, xmaxForZ itd.
+// QMap<QInt, QInt> — e.g. envColors, xmaxForZ etc.
 function readQMapII(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = r.readInt32(); o[k] = v; }
@@ -1910,7 +1910,7 @@ function writeQMapII(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); w.writeInt32(v); }
 }
 
-// QMap<QInt, QString> — np. areaNames (z kluczem -1 na początku)
+// QMap<QInt, QString> — e.g. areaNames (with key -1 first)
 function readQMapIS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = readQString(r); o[k] = v; }
@@ -1922,7 +1922,7 @@ function writeQMapIS(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); writeQString(w, v); }
 }
 
-// QMap<QInt, QColor> — np. mCustomEnvColors
+// QMap<QInt, QColor> — e.g. mCustomEnvColors
 function readQMapIC(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = readQColor(r); o[k] = v; }
@@ -1934,16 +1934,16 @@ function writeQMapIC(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); writeQColor(w, v); }
 }
 
-// audyt T5/F1: bezpieczny zapis klucza do plain-object mapy — "__proto__" przez
-// defineProperty (zwykly assign jest w JS cicho ignorowany, klucz ginial bez sladu).
-// enumerable:true WYMAGANE: JSON.stringify, Object.entries i zapis .arkmap/.dat musza
-// widziec klucz; writable/configurable:true zeby edytor mogl go pozniej nadpisac.
+// audit T5/F1: safe key insertion into a plain-object map — "__proto__" via
+// defineProperty (a plain assignment is silently ignored in JS; the key vanished without a trace).
+// enumerable:true is REQUIRED: JSON.stringify, Object.entries and .arkmap/.dat writes must
+// see the key; writable/configurable:true so the editor can overwrite it later.
 function _setMapKey(o, k, v) {
   if (k === '__proto__') Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true });
   else o[k] = v;
 }
 
-// QMap<QString, QUInt> — np. mpRoomDbHashToRoomId
+// QMap<QString, QUInt> — e.g. mpRoomDbHashToRoomId
 function readQMapSU(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); _setMapKey(o, k, v); }
@@ -1955,7 +1955,7 @@ function writeQMapSU(w, o) {
   for (const [k, v] of e) { writeQString(w, k); w.writeUInt32(v); }
 }
 
-// QMap<QString, QString> — np. userData, mUserData
+// QMap<QString, QString> — e.g. userData, mUserData
 function readQMapSS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = readQString(r); _setMapKey(o, k, v); }
@@ -1967,7 +1967,7 @@ function writeQMapSS(w, o) {
   for (const [k, v] of e) { writeQString(w, k); writeQString(w, v); }
 }
 
-// QMap<QString, QInt> — np. exitWeights, doors, mRoomIdHash
+// QMap<QString, QInt> — e.g. exitWeights, doors, mRoomIdHash
 function readQMapSI(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readInt32(); _setMapKey(o, k, v); }
@@ -2042,14 +2042,14 @@ function writeQMapSLP(w, o) {
 function readQMMUS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) {
-    const k = r.readInt32(), v = readQString(r);  // audyt T4/W2: klucz = id pokoi (int32, ze znakiem)
+    const k = r.readInt32(), v = readQString(r);  // audit T4/W2: key = room id (int32, signed)
     if (!o[k]) o[k] = [];
     o[k].push(v);
   }
   return o;
 }
 function writeQMMUS(w, o) {
-  // reversed object entries — identyczne z oryginałem
+  // reversed object entries — identical to the original
   const entries = Object.entries(o || {}).reverse();
   let total = 0;
   const pairs = [];
@@ -2106,34 +2106,34 @@ function writeQListU(w, a) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Typy złożone Mudlet
+// Mudlet compound types
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wersje formatu Mudlet DAT — do sprawdzenia przy odczycie
+// Mudlet DAT format versions — checked on read
 //
-//  v17 — xminForZ/ymaxForZ/itp., mUserData mapy
-//  v18 — rooms jako QSet, mRoomIdHash per profil
-//  v19 — mSymbol jako QString, mapSymbolFont bezpośrednio
-//  v20 — customLines lowercase keys, QColor zamiast QList<int>  ← aktualna produkcja
-//  v21 — specialExits nowy format (QMap<cmd,id>), mSpecialExitLocks osobno,
-//         mSymbolColor bezpośrednio, labele w TArea, mLast2DMapZoom
-//  v22 — pole hidden pokoju
-//  v23+ — nieznane: bezpieczny fallback, zachowaj dane bez interpretacji
+//  v17 — xminForZ/ymaxForZ/etc., map mUserData
+//  v18 — rooms as QSet, mRoomIdHash per profile
+//  v19 — mSymbol as QString, mapSymbolFont inline
+//  v20 — customLines lowercase keys, QColor instead of QList<int>  ← current production
+//  v21 — specialExits new format (QMap<cmd,id>), mSpecialExitLocks separate,
+//         mSymbolColor inline, labels in TArea, mLast2DMapZoom
+//  v22 — room hidden field
+//  v23+ — unknown: safe fallback, keep data without interpretation
 //
-// Przy zapisie zawsze piszemy v20 (aktualna wersja produkcyjna Mudleta).
-// Przy odczycie obsługujemy v17–v22 ze wszystkimi bramkami wersji.
-// Pliki nowsze niż MUDLET_DAT_MAX_SUPPORTED_VERSION są odrzucane z błędem.
+// On write we always emit v20 (Mudlet's current production version).
+// On read we support v17–v22 with all version gates.
+// Files newer than MUDLET_DAT_MAX_SUPPORTED_VERSION are rejected with an error.
 // ─────────────────────────────────────────────────────────────────────────────
-const MUDLET_DAT_MIN_VERSION     = 17;   // minimum które obsługujemy
-const MUDLET_DAT_WRITE_VERSION   = 20;   // wersja którą zawsze piszemy
-const MUDLET_DAT_MAX_SUPPORTED_VERSION = 22;  // maximum które umiemy czytać
+const MUDLET_DAT_MIN_VERSION     = 17;   // minimum we support
+const MUDLET_DAT_WRITE_VERSION   = 20;   // version we always write
+const MUDLET_DAT_MAX_SUPPORTED_VERSION = 22;  // maximum we can read
 
 // ─────────────────────────────────────────────────────────────────────────────
 // readMudletArea(r, version)
 // ─────────────────────────────────────────────────────────────────────────────
 function readMudletArea(r, version) {
-  const rooms     = readQListI(r);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
+  const rooms     = readQListI(r);  // audit T4/W1: room id list = int32 (signed)
   const zLevels   = readQListI(r);
   const mAreaExits = readQMMIPP(r);
   const gridMode  = !!r.readInt8();
@@ -2148,7 +2148,7 @@ function readMudletArea(r, version) {
   const isZone    = !!r.readInt8();
   const zoneAreaRef = r.readInt32();
 
-  // v21+: mLast2DMapZoom zapisany bezpośrednio przed userData
+  // v21+: mLast2DMapZoom stored inline before userData
   let mLast2DMapZoom = null;
   if (version >= 21) {
     mLast2DMapZoom = r.readDouble();
@@ -2156,7 +2156,7 @@ function readMudletArea(r, version) {
 
   const userData  = readQMapSS(r);
 
-  // v21+: labele wbudowane w obszar (wcześniej były globalnie po areaCount)
+  // v21+: labels embedded in the area (previously global after areaCount)
   let areaLabels = null;
   if (version >= 21) {
     const labelCount = _datCounter(r.readInt32());  // audyt ext F2.8
@@ -2171,17 +2171,17 @@ function readMudletArea(r, version) {
     max_x, max_y, max_z, min_x, min_y, min_z,
     span, xmaxForZ, ymaxForZ, xminForZ, yminForZ,
     pos, isZone, zoneAreaRef,
-    mLast2DMapZoom, // null dla v17-v20 (odczytany z userData fallback przez Mudlet)
+    mLast2DMapZoom, // null for v17-v20 (read from userData fallback by Mudlet)
     userData,
-    areaLabels,    // null dla v17-v20 (labele są globalnie)
+    areaLabels,    // null for v17-v20 (labels are global)
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// writeMudletArea — zawsze pisze w formacie v20
+// writeMudletArea — always writes in v20 format
 // ─────────────────────────────────────────────────────────────────────────────
 function writeMudletArea(w, a) {
-  writeQListI(w,  a.rooms      ?? []);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
+  writeQListI(w,  a.rooms      ?? []);  // audit T4/W1: room id list = int32 (signed)
   writeQListI(w,  a.zLevels    ?? []);
   writeQMMIPP(w,  a.mAreaExits ?? {});
   w.writeInt8(a.gridMode ? 1 : 0);
@@ -2195,14 +2195,14 @@ function writeMudletArea(w, a) {
   writeQVector(w, a.pos        ?? [0, 0, 0]);
   w.writeInt8(a.isZone ? 1 : 0);
   w.writeInt32(a.zoneAreaRef   ?? 0);
-  // v20: userData (mLast2DMapZoom idzie do userData["system.fallback_map2DZoom"] jeśli potrzeba)
+  // v20: userData (mLast2DMapZoom goes to userData["system.fallback_map2DZoom"] if needed)
   const ud = { ...(a.userData ?? {}) };
   if (a.mLast2DMapZoom != null && !ud['system.fallback_map2DZoom']) {
-    // Jeśli dane przyszły z v21+ mamy zoom bezpośrednio — zapisz jako fallback dla v20
+    // If data came from v21+ we have the zoom inline — write it as a fallback for v20
     ud['system.fallback_map2DZoom'] = String(a.mLast2DMapZoom);
   }
   writeQMapSS(w, ud);
-  // v20: labele NIE są tutaj — są zapisywane globalnie po mRoomIdHash
+  // v20: labels are NOT here — they are written globally after mRoomIdHash
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2218,29 +2218,29 @@ function readMudletRoom(r, version) {
   const up          = r.readInt32(), down      = r.readInt32();
   const inn         = r.readInt32(), out       = r.readInt32();
   const environment = r.readInt32();
-  const weight      = Math.max(1, r.readInt32());  // Mudlet wymusza min=1
+  const weight      = Math.max(1, r.readInt32());  // Mudlet enforces min=1
   const name        = readQString(r);
   const isLocked    = !!r.readInt8();
 
-  // v22+: hidden (pokój niewidoczny na mapie)
+  // v22+: hidden (room invisible on the map)
   let hidden = false;
   if (version >= 22) {
     hidden = !!r.readInt8();
   }
 
-  // specialExits: format zmienił się w v21
-  let rawSpecialExits = {};   // stary format (v6-v20): QMultiMap<int, "0cmd"/"1cmd">
+  // specialExits: format changed in v21
+  let rawSpecialExits = {};   // old format (v6-v20): QMultiMap<int, "0cmd"/"1cmd">
   let mSpecialExits   = {};   // cmd → roomId
-  let mSpecialExitLocks = []; // zablokowane (stary: lista roomId, v21+: lista cmd)
+  let mSpecialExitLocks = []; // locked (old: roomId list, v21+: cmd list)
 
   if (version >= 21) {
-    // v21+: QMap<QString, int>  cmd → roomId  (zamki osobno jako QSet<QString> na końcu)
+    // v21+: QMap<QString, int>  cmd → roomId  (locks separate as QSet<QString> at the end)
     const newSpecialExits = readQMapSI(r);
     mSpecialExits = newSpecialExits;
-    // Zrekonstruuj rawSpecialExits dla kompatybilności wstecznej przy zapisie v20
+    // Reconstruct rawSpecialExits so v20 writes keep the old layout
     for (const [cmd, tid] of Object.entries(newSpecialExits)) {
       rawSpecialExits[tid] = rawSpecialExits[tid] ?? [];
-      rawSpecialExits[tid].push('0' + cmd); // zamki dodamy po odczytaniu mSpecialExitLocks
+      rawSpecialExits[tid].push('0' + cmd); // locks are added after mSpecialExitLocks is read
     }
   } else {
     // v6-v20: QMultiMap<int, QString>  roomId → "0cmd"/"1cmd"
@@ -2255,17 +2255,17 @@ function readMudletRoom(r, version) {
     }
   }
 
-  // symbol: format zmienił się w v19
+  // symbol: format changed in v19
   let symbol = '';
   if (version >= 19) {
     symbol = readQString(r);
   } else {
-    // v9-v18: stary qint8 (ASCII)
+    // v9-v18: old qint8 (ASCII)
     const oldChar = r.readInt8();
     if (oldChar > 32) symbol = String.fromCharCode(oldChar);
   }
 
-  // v21+: mSymbolColor bezpośrednio jako QColor
+  // v21+: mSymbolColor inline as QColor
   let symbolColor = null;
   if (version >= 21) {
     symbolColor = readQColor(r);
@@ -2273,12 +2273,12 @@ function readMudletRoom(r, version) {
 
   const userData = readQMapSS(r);
 
-  // Jeśli v19-v20: symbolColor może być w userData jako fallback
+  // If v19-v20: symbolColor may be in userData as a fallback
   if (version < 21 && userData['system.fallback_symbol_color']) {
-    // Zostawiamy w userData — Mudlet sam to obsługuje przy wczytaniu
+    // Left in userData — Mudlet handles it itself on load
   }
 
-  // customLines: format zmienił się w v20 (lowercase keys, QColor zamiast QList<int>)
+  // customLines: format changed in v20 (lowercase keys, QColor instead of QList<int>)
   let customLines = {}, customLinesArrow = {}, customLinesColor = {}, customLinesStyle = {};
   if (version >= 20) {
     customLines      = readQMapSLP(r);
@@ -2286,7 +2286,7 @@ function readMudletRoom(r, version) {
     customLinesColor = readQMapSC(r);
     customLinesStyle = readQMapSU2(r);
   } else if (version >= 11) {
-    // v11-v19: uppercase keys, QList<int> dla kolorów, QString dla stylu
+    // v11-v19: uppercase keys, QList<int> for colors, QString for style
     const oldLines = readQMapSLP(r);
     for (const [k, v] of Object.entries(oldLines)) {
       customLines[k.toLowerCase()] = v;
@@ -2295,7 +2295,7 @@ function readMudletRoom(r, version) {
     for (const [k, v] of Object.entries(oldArrow)) {
       customLinesArrow[k.toLowerCase()] = v;
     }
-    // stary kolor: QMap<QString, QList<int>>
+    // old color: QMap<QString, QList<int>>
     const n = r.readUInt32();
     for (let i = 0; i < n; i++) {
       const k = readQString(r);
@@ -2306,7 +2306,7 @@ function readMudletRoom(r, version) {
         customLinesColor[k.toLowerCase()] = { spec:1, alpha:255, r:rgb[0], g:rgb[1], b:rgb[2], pad:0 };
       }
     }
-    // stary styl: QMap<QString, QString>
+    // old style: QMap<QString, QString>
     const styleMap = { 'dot line': 3, 'dash line': 2, 'dash dot line': 4, 'dash dot dot line': 5 };
     const ns = r.readUInt32();
     for (let i = 0; i < ns; i++) {
@@ -2314,7 +2314,7 @@ function readMudletRoom(r, version) {
       const sv = readQString(r);
       customLinesStyle[k.toLowerCase()] = styleMap[sv] ?? 1;
     }
-    // Napraw brakujące kolory (Mudlet wstawia Qt::red dla brakujących)
+    // Fix missing colors (Mudlet inserts Qt::red for missing ones)
     for (const k of Object.keys(customLines)) {
       if (!customLinesColor[k]) {
         customLinesColor[k] = { spec:1, alpha:255, r:255, g:0, b:0, pad:0 };
@@ -2322,11 +2322,11 @@ function readMudletRoom(r, version) {
     }
   }
 
-  // v21+: mSpecialExitLocks jako QSet<QString>
+  // v21+: mSpecialExitLocks as QSet<QString>
   if (version >= 21) {
     const lockSet = readQSetS(r);
     mSpecialExitLocks = [...lockSet];
-    // Zaktualizuj rawSpecialExits o info o zamkach
+    // Update rawSpecialExits with the lock info
     for (const cmd of lockSet) {
       const tid = mSpecialExits[cmd];
       if (tid != null && rawSpecialExits[tid]) {
@@ -2363,7 +2363,7 @@ function readMudletRoom(r, version) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// writeMudletRoom — zawsze pisze w formacie v20
+// writeMudletRoom — always writes in v20 format
 // ─────────────────────────────────────────────────────────────────────────────
 function writeMudletRoom(w, room) {
   w.writeInt32(room.area        ?? 0);
@@ -2378,8 +2378,8 @@ function writeMudletRoom(w, room) {
   w.writeInt32(Math.max(1, room.weight ?? 1));
   writeQString(w,   room.name    ?? '');
   w.writeInt8(room.isLocked ? 1 : 0);
-  // v20: specialExits w starym formacie QMultiMap<int,"0cmd"/"1cmd">
-  // Jeśli dane przyszły z v21+ mamy mSpecialExits+mSpecialExitLocks — rekonstruuj rawSpecialExits
+  // v20: specialExits in the old QMultiMap<int,"0cmd"/"1cmd"> format
+  // If data came from v21+ we have mSpecialExits+mSpecialExitLocks — reconstruct rawSpecialExits
   let raw = room.rawSpecialExits ?? {};
   if (!raw || Object.keys(raw).length === 0) {
     if (room.mSpecialExits && Object.keys(room.mSpecialExits).length > 0) {
@@ -2393,7 +2393,7 @@ function writeMudletRoom(w, room) {
   }
   writeQMMUS(w, raw);
   writeQString(w,   room.symbol  ?? '');
-  // v20: symbolColor idzie do userData jako system.fallback_symbol_color
+  // v20: symbolColor goes to userData as system.fallback_symbol_color
   const ud = { ...(room.userData ?? {}) };
   if (room.symbolColor && room.symbolColor.spec > 0 && !ud['system.fallback_symbol_color']) {
     const c = room.symbolColor;
@@ -2418,7 +2418,7 @@ function readMudletLabel(r, version) {
   const id        = r.readInt32();
   const pos       = readQVector(r);
   if (version < 21) {
-    // v11-v20: dwa nieużywane QPointF (każdy 2×double) — skip bytes
+    // v11-v20: two unused QPointF (2xdouble each) — skip bytes
     r.readDouble(); r.readDouble();
   }
   const sizeW     = r.readDouble();
@@ -2436,7 +2436,7 @@ function writeMudletLabel(w, lbl) {
   const DEF_COLOR = { spec: 1, alpha: 255, r: 0, g: 0, b: 0, pad: 0 };
   w.writeInt32(lbl.id ?? 0);
   writeQVector(w, lbl.pos     ?? [0, 0, 0]);
-  // v20: jeden nieużywany QPointF (2×double) — dummy
+  // v20: one unused QPointF (2xdouble) — dummy
   w.writeDouble(0.0); w.writeDouble(0.0);
   w.writeDouble(lbl.size?.[0] ?? 0.0);
   w.writeDouble(lbl.size?.[1] ?? 0.0);
@@ -2449,7 +2449,7 @@ function writeMudletLabel(w, lbl) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QSet<QString> — używany w v21+ dla mSpecialExitLocks
+// QSet<QString> — used in v21+ for mSpecialExitLocks
 // ─────────────────────────────────────────────────────────────────────────────
 function readQSetS(r) {
   const n = r.readUInt32();
@@ -2459,13 +2459,13 @@ function readQSetS(r) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// API publiczne
+// Public API
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Wczytuje plik Mudlet map.dat z ArrayBuffer.
- * Obsługuje wersje 17–22. Pliki nowsze niż MUDLET_DAT_MAX_SUPPORTED_VERSION
- * zwracają błąd z polem .unsupportedVersion = true.
+ * Reads a Mudlet map.dat file from an ArrayBuffer.
+ * Supports versions 17-22. Files newer than MUDLET_DAT_MAX_SUPPORTED_VERSION
+ * return an error with .unsupportedVersion = true.
  * @param {ArrayBuffer} arrayBuffer
  * @returns {object} raw map object
  */
@@ -2474,7 +2474,7 @@ function readMudletDat(arrayBuffer) {
 
   const version = r.readInt32();
 
-  // Sprawdź wersję — odrzuć zbyt nowe pliki których nie umiemy czytać
+  // Check version — reject files too new for us to read
   if (version > MUDLET_DAT_MAX_SUPPORTED_VERSION) {
     return {
       error: true,
@@ -2503,14 +2503,14 @@ function readMudletDat(arrayBuffer) {
   const useOnlyMapFont       = !!r.readInt8();
 
   // MudletAreas
-  const importWarnings = [];  // audyt ext F2.9/F2.10: warningi importu (duplikaty, zgubione rekordy)
+  const importWarnings = [];  // audit ext F2.9/F2.10: import warnings (duplicates, lost records)
   const areas = {};
   const areaCount = _datCounter(r.readInt32());  // audyt ext F2.8
   for (let i = 0; i < areaCount; i++) {
     const areaId = r.readInt32();
-    // audyt ext F2.9: duplikat id obszaru → warning (last-wins bez zmian), NIE throw
-    // Arc 37: `!== undefined` zamiast hasOwnProperty — klucze to int32 z readInt32(),
-    // prototype-chain nie wchodzi w grę (zachowanie identyczne, taniej w hot loop).
+    // audit ext F2.9: duplicate area id -> warning (last-wins, unchanged), NOT a throw
+    // Arc 37: `!== undefined` instead of hasOwnProperty — keys are int32 from readInt32(),
+    // the prototype chain plays no role (identical behavior, cheaper in the hot loop).
     if (areas[areaId] !== undefined)
       importWarnings.push(`duplicate area id #${areaId} — kept the last record`);
     areas[areaId] = readMudletArea(r, version);
@@ -2519,9 +2519,9 @@ function readMudletDat(arrayBuffer) {
   // mRoomIdHash
   const mRoomIdHash = readQMapSI(r);
 
-  // Labele:
-  // v11-v20: globalnie po mRoomIdHash — (lblAreaCount, labelCount, areaId, labels[])
-  // v21+:    wbudowane w każdy obszar (już odczytane w readMudletArea)
+  // Labels:
+  // v11-v20: global after mRoomIdHash — (lblAreaCount, labelCount, areaId, labels[])
+  // v21+:    embedded in each area (already read in readMudletArea)
   const labels = {};
   if (version < 21) {
     const lblAreaCount = _datCounter(r.readInt32());  // audyt ext F2.8
@@ -2534,7 +2534,7 @@ function readMudletDat(arrayBuffer) {
       }
     }
   } else {
-    // Przenieś labele z obszarów do globalnej mapy (dla kompatybilności wewnętrznej)
+    // Move labels from areas into the global map (for internal compatibility)
     for (const [areaId, area] of Object.entries(areas)) {
       if (area.areaLabels && area.areaLabels.length > 0) {
         labels[areaId] = area.areaLabels;
@@ -2542,12 +2542,12 @@ function readMudletDat(arrayBuffer) {
     }
   }
 
-  // MudletRooms — do końca bufora
+  // MudletRooms — until the end of the buffer
   const rooms = {};
   while (r.remaining() > 0) {
     const roomId = r.readInt32();
-    // audyt ext F2.9: duplikat id pokoju → warning (last-wins bez zmian), NIE throw
-    // Arc 37: `!== undefined` jak wyżej — klucze int32, prototype-chain nie wchodzi w grę.
+    // audit ext F2.9: duplicate room id -> warning (last-wins, unchanged), NOT a throw
+    // Arc 37: `!== undefined` as above — int32 keys, the prototype chain plays no role.
     if (rooms[roomId] !== undefined)
       importWarnings.push(`duplicate room id #${roomId} — kept the last record`);
     rooms[roomId] = readMudletRoom(r, version);
@@ -2561,15 +2561,15 @@ function readMudletDat(arrayBuffer) {
 }
 
 /**
- * Zapisuje raw map object do binarnego formatu Mudlet map.dat v20.
- * Zawsze zapisuje w wersji MUDLET_DAT_WRITE_VERSION (20) — aktualny standard produkcyjny.
+ * Writes a raw map object to the Mudlet map.dat v20 binary format.
+ * Always writes in MUDLET_DAT_WRITE_VERSION (20) — the current production standard.
  * @param {object} dat
  * @returns {Uint8Array}
  */
 function writeMudletDat(dat) {
   const w = new WriteBuffer();
 
-  // Zawsze zapisuj w wersji produkcyjnej v20
+  // Always write in production version v20
   w.writeInt32(MUDLET_DAT_WRITE_VERSION);
   writeQMapII(w,  dat.envColors            ?? {});
   writeQMapIS(w,  dat.areaNames            ?? {});
@@ -2580,7 +2580,7 @@ function writeMudletDat(dat) {
   w.writeDouble(dat.mapFontFudgeFactor     ?? 1.0);
   w.writeInt8(dat.useOnlyMapFont ? 1 : 0);
 
-  // MudletAreas — posortowane rosnąco po areaId
+  // MudletAreas — sorted ascending by areaId
   const areaEntries = Object.entries(dat.areas ?? {}).sort(cmpInt);
   w.writeInt32(areaEntries.length);
   for (const [areaId, area] of areaEntries) {
@@ -2591,15 +2591,15 @@ function writeMudletDat(dat) {
   // mRoomIdHash
   writeQMapSI(w, dat.mRoomIdHash ?? {});
 
-  // Labele — w v20 globalnie po mRoomIdHash
-  // Zbierz z dat.labels ORAZ z obszarów (jeśli dane z v21+ mają areaLabels)
+  // Labels — in v20 global after mRoomIdHash
+  // Collect from dat.labels AND from areas (if v21+ data has areaLabels)
   const allLabels = { ...(dat.labels ?? {}) };
   for (const [areaId, area] of Object.entries(dat.areas ?? {})) {
     if (area.areaLabels && area.areaLabels.length > 0 && !allLabels[areaId]) {
       allLabels[areaId] = area.areaLabels;
     }
   }
-  // Filtruj tylko obszary z co najmniej 1 labelem
+  // Keep only areas with at least 1 label
   const lblEntries = Object.entries(allLabels).filter(([, arr]) => arr && arr.length > 0);
   w.writeInt32(lblEntries.length);
   for (const [areaId, lblArr] of lblEntries) {
@@ -2609,7 +2609,7 @@ function writeMudletDat(dat) {
     for (const lbl of arr) writeMudletLabel(w, lbl);
   }
 
-  // MudletRooms — w odwróconej kolejności (identycznie z oryginałem Mudleta)
+  // MudletRooms — in reverse order (identical to the original Mudlet)
   const roomEntries = Object.entries(dat.rooms ?? {}).reverse();
   for (const [roomId, room] of roomEntries) {
     w.writeInt32(parseInt(roomId));
@@ -2620,7 +2620,7 @@ function writeMudletDat(dat) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Narzędzia pomocnicze dla konwersji base64 (piksmapy etykiet)
+// Helper utilities for base64 conversion (label pixmaps)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function uint8ToBase64(bytes) {
@@ -2678,7 +2678,7 @@ function validateLabel(label, path, errors) {
     return;
   }
   if (!Number.isInteger(label.id))        errors.push(err(`${path}.id`,     'must be integer'));
-  // audyt ext F2.11: isFinite zamiast typeof — NaN/Infinity nie przechodza (komunikat bez zmian)
+  // audit ext F2.11: isFinite instead of typeof — NaN/Infinity do not pass (message unchanged)
   if (!Number.isFinite(label.x))          errors.push(err(`${path}.x`,      'must be number'));
   if (!Number.isFinite(label.y))          errors.push(err(`${path}.y`,      'must be number'));
   if (!Number.isInteger(label.z))         errors.push(err(`${path}.z`,      'must be integer'));
@@ -2693,7 +2693,7 @@ function validateLabel(label, path, errors) {
     errors.push(err(`${path}.show_on_top`, 'must be boolean'));
   if (label.pixmap !== undefined && label.pixmap !== null && typeof label.pixmap !== 'string')
     errors.push(err(`${path}.pixmap`, 'must be string or null'));
-  // audyt T4/S3: poprawnosc base64 i rozmiar — kontrolowany blad przy imporcie zamiast wywalenia w atob przy eksporcie
+  // audit T4/S3: base64 validity and size — a controlled error at import instead of crashing in atob at export
   if (typeof label.pixmap === 'string' && label.pixmap.length) {
     if (label.pixmap.length > 4194304) errors.push(err(`${path}.pixmap`, 'too large (limit 4 MB base64)'));
     else { try { atob(label.pixmap); } catch (e) { errors.push(err(`${path}.pixmap`, 'must be valid base64')); } }
@@ -2765,7 +2765,7 @@ function validateRoom(room, path, errors, warnings = []) {
         if (!VALID_DIRS.has(d)) errors.push(err(`${path}.stubs`, `"${d}" is not a valid direction`));
         if (seen.has(d)) errors.push(err(`${path}.stubs`, `duplicate direction "${d}"`));
         seen.add(d);
-        // stubs mogą współistnieć z exits (Mudlet to dopuszcza)
+        // stubs may coexist with exits (Mudlet allows this)
       }
     }
   }
@@ -2780,7 +2780,7 @@ function validateRoom(room, path, errors, warnings = []) {
         if (!VALID_DIRS.has(d)) errors.push(err(`${path}.exit_locks`, `"${d}" is not a valid direction`));
         if (seen.has(d)) errors.push(err(`${path}.exit_locks`, `duplicate direction "${d}"`));
         seen.add(d);
-        // exit_lock może dotyczyć kierunku spoza exits (Mudlet to dopuszcza)
+        // an exit_lock may concern a direction outside exits (Mudlet allows this)
       }
     }
   }
@@ -2812,7 +2812,7 @@ function validateRoom(room, path, errors, warnings = []) {
 
   // doors: keys must be in exits, stubs, or special_exits; valid string values
   if (_doorsOk) for (const d of Object.keys(doors)) {
-    // drzwi mogą być w kierunkach spoza exits/stubs/special_exits (Mudlet to dopuszcza)
+    // doors may be in directions outside exits/stubs/special_exits (Mudlet allows this)
     if (!['open', 'closed', 'locked'].includes(doors[d]))
       errors.push(err(`${path}.doors.${d}`, 'must be "open", "closed", or "locked"'));
   }
@@ -2835,7 +2835,7 @@ function validateRoom(room, path, errors, warnings = []) {
     else if (cl.points.length > 0) {
       for (let pi = 0; pi < cl.points.length; pi++) {
         const pt = cl.points[pi];
-        // audyt ext F2.11: isFinite — NaN/Infinity w punkcie CL odrzucone
+        // audit ext F2.11: isFinite — NaN/Infinity in a CL point rejected
         if (!Array.isArray(pt) || pt.length !== 2 || !Number.isFinite(pt[0]) || !Number.isFinite(pt[1]))
           errors.push(err(`${path}.custom_lines.${d}.points[${pi}]`, 'must be [number, number]'));
       }
@@ -2891,14 +2891,14 @@ function validateArea(area, path, errors, warnings = []) {
     errors.push(err(`${path}.pos`, 'must be an array of 3 integers'));
   if (area.user_data    !== undefined) validateUserData(area.user_data, `${path}.user_data`, errors);
 
-  // audyt T4/S2: obiekt zamiast tablicy przechodzil cicho (petla po undefined.length)
+  // audit T4/S2: an object instead of an array used to pass silently (loop over undefined.length)
   if (area.labels !== undefined && !Array.isArray(area.labels)) errors.push(err(`${path}.labels`, 'must be an array'));
   for (let i = 0; i < (Array.isArray(area.labels) ? area.labels : []).length; i++) {
     validateLabel(area.labels[i], `${path}.labels[${i}]`, errors);
   }
   // Check label ID uniqueness within area
   const labelIds = new Set();
-  for (const lbl of (Array.isArray(area.labels) ? area.labels : [])) {  // audyt T4/S2
+  for (const lbl of (Array.isArray(area.labels) ? area.labels : [])) {  // audit T4/S2
     if (lbl && Number.isInteger(lbl.id)) {
       if (labelIds.has(lbl.id)) errors.push(err(`${path}.labels`, `duplicate label id ${lbl.id}`));
       labelIds.add(lbl.id);
@@ -3018,15 +3018,15 @@ function validate(map) {
 // Divergence: EN internal invariant message in _CanonBuf (H0.3).
 
 // ── checksum.js ──────────────────────────────────────────────────────────────
-// Hierarchiczne sumy kontrolne XXH3-64 (alg v4) dla integralności pliku .arkmap
-// Struktura: plik → obszary → pokoje
-// Zapis (koperta v2): top-level checksums = { alg:'v4', file, meta, areas:{id→hex16}, rooms:{id→hex16} }
-// Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V4.md
-// Weryfikacja wyłącznie alg 'v4'; brak sum → cicho; inny alg → GŁOŚNE ostrzeżenie (algMismatch).
+// Hierarchical XXH3-64 checksums (alg v4) for .arkmap file integrity
+// Structure: file -> areas -> rooms
+// Envelope (v2): top-level checksums = { alg:'v4', file, meta, areas:{id->hex16}, rooms:{id->hex16} }
+// Canonical encoding per spec: tests/checksums/CANONICAL_V4.md
+// Verification of alg 'v4' only; no checksums -> silent; other alg -> LOUD warning (algMismatch).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// _stripRoomDefaults(room) — usuwa puste kontenery i wartości domyślne z obiektu pokoju.
-// Modyfikuje room in-place. Używane przez _serializeMap (na klonie).
+// _stripRoomDefaults(room) — removes empty containers and default values from a room object.
+// Mutates room in-place. Used by _serializeMap (on a clone).
 // Odpowiada spec §6 omission convention: optional fields omitted when carrying no information.
 function _stripRoomDefaults(room) {
   // Empty containers → omit
@@ -3043,7 +3043,7 @@ function _stripRoomDefaults(room) {
   // Default values → omit
   if (room.weight === 1)      delete room.weight;
   if (room.locked === false)  delete room.locked;
-  if (room.hidden === false)  delete room.hidden;  // audyt T3/W4: domyślne false nie wchodzi do CRC/eksportu
+  if (room.hidden === false)  delete room.hidden;  // audit T3/W4: default false stays out of CRC/export
   if (room.symbol === '')     delete room.symbol;
   if (room.name === '')       delete room.name;
   if (room.notes === '')      delete room.notes;
@@ -3061,9 +3061,9 @@ function _stripRoomDefaults(room) {
 
 
 // ====XXH3-64-BEGIN====
-// XXH3-64 (seed 0), czysty JS. Rdzen na parach u32 [hi,lo] (Number/Math.imul) — zero BigInt
-// w goracej sciezce; BigInt tylko na wyjsciu xxh3_64 (kontrakt API zachowany).
-// Bajtowo identyczny z portem referencji xxHash v0.8.3 — piny: tests/checksums/xxh3_golden.js
+// XXH3-64 (seed 0), pure JS. Core on u32 [hi,lo] pairs (Number/Math.imul) — zero BigInt
+// in the hot path; BigInt only at the xxh3_64 output (API contract preserved).
+// Byte-identical to the xxHash v0.8.3 reference port — pins: tests/checksums/xxh3_golden.js
 // (vectors_v4.json, oracle Python) + fuzz rownowaznosci z referencja BigInt:
 // tests/checksums/xxh3_fuzz_equiv.js (referencja: tests/checksums/xxh3.js).
 const XXH3_SECRET = Uint8Array.from([
@@ -3096,15 +3096,15 @@ function _r32(b, o) {
 }
 const _swap32 = w => ((w >>> 24) | ((w >>> 8) & 0xFF00) | ((w << 8) & 0xFF0000) | (w << 24)) >>> 0;
 
-// Rejestry robocze na poziomie modulu — zero alokacji w goracej petli.
-// Kontrakt: funkcje zwracaja rejestr, wynik wazny do nastepnego wywolania dowolnej z nich.
+// Module-level work registers — zero allocation in the hot loop.
+// Contract: functions return the register; the result is valid until the next call of any of them.
 const _LL = [0, 0], _LH = [0, 0], _HL = [0, 0], _HH = [0, 0];
-const _MF = [0, 0];                                          // wynik _mul128fold / _mix16B
-const _T64A = [0, 0];                                        // wynik _mul64into
-const _ACC = [0, 0], _ACC2 = [0, 0];                         // akumulatory sciezek dlugosci
+const _MF = [0, 0];                                          // result of _mul128fold / _mix16B
+const _T64A = [0, 0];                                        // result of _mul64into
+const _ACC = [0, 0], _ACC2 = [0, 0];                         // length-path accumulators
 const _ACC8 = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]; // _hashLong
 
-// 32x32 -> 64 dokladnie (limby 16-bit, wszystkie posrednie < 2^53)
+// 32x32 -> 64 exact (16-bit limbs, all intermediates < 2^53)
 function _umul32into(t, a, b) {
   const aL = a & 0xFFFF, aH = a >>> 16, bL = b & 0xFFFF, bH = b >>> 16;
   const w0 = aL * bL;
@@ -3113,7 +3113,7 @@ function _umul32into(t, a, b) {
   t[1] = ((w1 << 16) | (w0 & 0xFFFF)) >>> 0;
   t[0] = (aH * bH + Math.floor(tt / 65536) + Math.floor(w1 / 65536)) >>> 0;
 }
-// 64x64 -> 128 -> fold: (hi64 ^ lo64) iloczynu; wynik w _MF
+// 64x64 -> 128 -> fold: (hi64 ^ lo64) of the product; result in _MF
 function _mul128fold(aH, aL, bH, bL) {
   _umul32into(_LL, aL, bL);
   _umul32into(_LH, aL, bH);
@@ -3136,7 +3136,7 @@ function _add64into(acc, pH, pL) {
   acc[1] = s >>> 0;
   acc[0] = (acc[0] + pH + (s >= 4294967296 ? 1 : 0)) >>> 0;
 }
-// t = (h,l) * (mH,mL) mod 2^64 (rejestr docelowy, zero alokacji)
+// t = (h,l) * (mH,mL) mod 2^64 (destination register, zero allocation)
 function _mul64into(t, h, l, mH, mL) {
   _umul32into(_LL, l, mL);
   const mid = (Math.imul(h, mL) + Math.imul(l, mH)) >>> 0;
@@ -3174,7 +3174,7 @@ function _rrmxmxIp(p, len) {
   const t0 = h >>> 28, t1 = ((l >>> 28) | (h << 4)) >>> 0;   // h ^= h >> 28
   p[0] = (h ^ t0) >>> 0; p[1] = (l ^ t1) >>> 0;
 }
-function _mix16B(input, ioff, soff) {                        // wynik w _MF
+function _mix16B(input, ioff, soff) {                        // result in _MF
   const aH = _r32(input, ioff + 4) ^ _r32(XXH3_SECRET, soff + 4);
   const aL = _r32(input, ioff) ^ _r32(XXH3_SECRET, soff);
   const bH = _r32(input, ioff + 12) ^ _r32(XXH3_SECRET, soff + 12);
@@ -3182,7 +3182,7 @@ function _mix16B(input, ioff, soff) {                        // wynik w _MF
   return _mul128fold(aH, aL, bH, bL);
 }
 
-// bitflipy i pusty skrot liczone z sekretu raz, przy ladowaniu (stale modulu)
+// bitflips and the empty digest computed from the secret once, at load (module constants)
 const _BF1H = (_r32(XXH3_SECRET, 28) ^ _r32(XXH3_SECRET, 36)) >>> 0, _BF1L = (_r32(XXH3_SECRET, 24) ^ _r32(XXH3_SECRET, 32)) >>> 0;
 const _BF2H = (_r32(XXH3_SECRET, 44) ^ _r32(XXH3_SECRET, 52)) >>> 0, _BF2L = (_r32(XXH3_SECRET, 40) ^ _r32(XXH3_SECRET, 48)) >>> 0;
 const _BF3H = (_r32(XXH3_SECRET, 12) ^ _r32(XXH3_SECRET, 20)) >>> 0, _BF3L = (_r32(XXH3_SECRET, 8) ^ _r32(XXH3_SECRET, 16)) >>> 0;
@@ -3323,8 +3323,8 @@ function _hashLong(input, len) {
   return _ACC;
 }
 
-// _xxh3pair(bytes, len?) -> rejestr [hi, lo] (u32, u32); wynik wazny do nastepnego wywolania.
-// len < bytes.length: hash tylko prefixu (goraca sciezka czyta wprost ze wspolnego bufora, bez subarray).
+// _xxh3pair(bytes, len?) -> register [hi, lo] (u32, u32); result valid until the next call.
+// len < bytes.length: hash the prefix only (hot path reads straight from the shared buffer, no subarray).
 function _xxh3pair(bytes, len) {
   if (len === undefined) len = bytes.length;
   if (len <= 16) return _len0to16(bytes, len);
@@ -3332,7 +3332,7 @@ function _xxh3pair(bytes, len) {
   if (len <= 240) return _len129to240(bytes, len);
   return _hashLong(bytes, len);
 }
-// tablica 2-znakowych bajtow hex — _pairHex64 bez padStart (pomiar: ~10x szybciej)
+// table of 2-char hex bytes — _pairHex64 without padStart (measured: ~10x faster)
 const _HEXB = new Array(256);
 for (let i = 0; i < 256; i++) _HEXB[i] = (i < 16 ? '0' : '') + i.toString(16);
 function _hex32(w) {
@@ -3341,7 +3341,7 @@ function _hex32(w) {
 function _pairHex64(p) {
   return _hex32(p[0]) + _hex32(p[1]);
 }
-// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0 — kontrakt bez zmian
+// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0 — contract unchanged
 function xxh3_64(bytes) {
   const p = _xxh3pair(bytes);
   return (BigInt(p[0]) << 32n) | BigInt(p[1]);
@@ -3352,7 +3352,7 @@ function xxh3_64hex(bytes) {
 // ====XXH3-64-END====
 
 // ====CANONICAL-V4-BEGIN====
-// Kanoniczne kodowanie binarne v4 — spec normatywny: tests/checksums/CANONICAL_V4.md
+// Canonical binary encoding v4 — normative spec: tests/checksums/CANONICAL_V4.md
 const _V4_DIR_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'up', 'down', 'in', 'out'];
 const _V4_DIR_SET = new Set(_V4_DIR_ORDER);
 const _CANON_NAN_BYTES = Uint8Array.from([0, 0, 0, 0, 0, 0, 0xF8, 0x7F]); // quiet-NaN 7ff8000000000000
@@ -3363,8 +3363,8 @@ const _canonTe = new TextEncoder();
 
 class _CanonBuf {
   constructor() { this.b = new Uint8Array(4096); this.n = 0; this._busy = false; this.dv = new DataView(this.b.buffer); }
-  // Straznik zagniezdzenia: reset w trakcie trwania innego kodowania nadpisalby bufor.
-  // Wejsciowe enkodery (pokoj/obszar/plik) robia reset() + release() w finally.
+  // Nesting guard: a reset while another encoding is in progress would overwrite the buffer.
+  // The entry encoders (room/area/file) do reset() + release() in finally.
   reset() {
     if (this._busy) throw new Error('_CanonBuf: nested use (reset during encoding)');
     this._busy = true; this.n = 0;
@@ -3388,7 +3388,7 @@ class _CanonBuf {
   }
   i32(v) { this.u32(v | 0); }
   f64(v) {
-    if (typeof v !== 'number' || Number.isNaN(v)) { this._cap(8); this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/nie-liczba → kanoniczny NaN (payload deterministyczny niezależnie od provenancji obiektu)
+    if (typeof v !== 'number' || Number.isNaN(v)) { this._cap(8); this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/non-number -> canonical NaN (payload deterministic regardless of object provenance)
     if (v === 0) v = 0;                                            // -0 → +0
     if (this.n + 8 > this.b.length) this._cap(8);
     this.dv.setFloat64(this.n, v, true); this.n += 8;
@@ -3397,7 +3397,7 @@ class _CanonBuf {
     if (this.n + 4 + s.length * 3 > this.b.length) this._cap(4 + s.length * 3);
     const b = this.b, o = this.n + 4;
     let i = 0;
-    for (; i < s.length; i++) {                                    // ASCII: bajty === kodowanie UTF-8
+    for (; i < s.length; i++) {                                    // ASCII: bytes === UTF-8 encoding
       const c = s.charCodeAt(i);
       if (c > 0x7F) break;
       b[o + i] = c;
@@ -3421,7 +3421,7 @@ class _CanonBuf {
 }
 const _canonBuf = new _CanonBuf();
 
-function _utf8cmp(a, b) {                                          // a, b: Uint8Array — porównanie bajtowe
+function _utf8cmp(a, b) {                                          // a, b: Uint8Array — byte comparison
   const n = Math.min(a.length, b.length);
   for (let i = 0; i < n; i++) { if (a[i] !== b[i]) return a[i] - b[i]; }
   return a.length - b.length;
@@ -3429,7 +3429,7 @@ function _utf8cmp(a, b) {                                          // a, b: Uint
 function _utf8SortArr(arr) {
   return arr.map(k => [k, _canonTe.encode(k)]).sort((p, q) => _utf8cmp(p[1], q[1])).map(p => p[0]);
 }
-// Klucze mapy kierunkowej: znane wg _V4_DIR_ORDER, potem nieznane UTF-8 bajtowo
+// Direction-map keys: known ones per _V4_DIR_ORDER, then unknown ones by raw UTF-8 bytes
 function _canonDirKeys(m) {
   const out = [];
   for (const d of _V4_DIR_ORDER) if (m[d] !== undefined) out.push(d);
@@ -3437,7 +3437,7 @@ function _canonDirKeys(m) {
   for (const k in m) if (!_V4_DIR_SET.has(k)) (unk || (unk = [])).push(k);
   return unk ? out.concat(_utf8SortArr(unk)) : out;
 }
-// Lista kierunków (array): jak wyżej
+// Direction list (array): as above
 function _canonDirList(arr) {
   const out = _V4_DIR_ORDER.filter(d => arr.includes(d));
   const unk = arr.filter(k => !_V4_DIR_SET.has(k));
@@ -3448,11 +3448,11 @@ function _encodeLabelCanonical(B, lb) {
   B.i32(lb.id); B.f64(lb.x); B.f64(lb.y); B.i32(lb.z);
   B.f64(lb.width); B.f64(lb.height);
   B.str(lb.text ?? '');
-  // tolerancja na uszkodzone pliki (verifyChecksums biegnie przed dialogiem walidacji):
-  // brakujace fg/bg kodowane jako [0,0,0] — deterministycznie, walidator i tak je odrzuci
+  // tolerance for corrupt files (verifyChecksums runs before the validation dialog):
+  // missing fg/bg are encoded as [0,0,0] — deterministically; the validator rejects them anyway
   const fg = Array.isArray(lb.fg_color) ? lb.fg_color : [0, 0, 0];
   const bg = Array.isArray(lb.bg_color) ? lb.bg_color : [0, 0, 0];
-  // v4: liczba skladowych + wszystkie kanaly (alfa objeta) — konwencja jak w _encodeColorsCanonical
+  // v4: component count + all channels (alpha included) — same convention as _encodeColorsCanonical
   B.u32(fg.length); for (const c of fg) B.i32(c | 0);
   B.u32(bg.length); for (const c of bg) B.i32(c | 0);
   B.u8(lb.show_on_top ? 1 : 0);
@@ -3462,7 +3462,7 @@ function _encodeLabelCanonical(B, lb) {
   else { B.u8(1); B.str(pm); }
 }
 
-// _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r4'). Bez klonowania.
+// _encodeRoomCanonical(room) — canonical room bytes (prefix 'r4'). No cloning.
 function _encodeRoomCanonical(room) {
   const B = _canonBuf; B.reset();
   try { _encodeRoomBody(B, room); return B.bytes(); } finally { B.release(); }
@@ -3536,7 +3536,7 @@ function _encodeRoomBody(B, room) {
       const e = cl[k];
       B.str(k);
       const pts = e.points || [];
-      B.u32(pts.length);                                           // [] = supresor — licznik 0
+      B.u32(pts.length);                                           // [] = suppressor — count 0
       for (const pt of pts) { B.f64(pt[0]); B.f64(pt[1]); }
       const color = e.color;
       if (color !== undefined && color !== null) {
@@ -3559,11 +3559,11 @@ function _encodeRoomBody(B, room) {
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.str(ud[k]); }
   }
-  const rh = room.hash;                                            // v4: hash pokoju z upstream (np. "45:28:0:Wyzima")
+  const rh = room.hash;                                            // v4: room hash from upstream (e.g. "45:28:0:Wyzima")
   if (typeof rh === 'string' && rh) B.str(rh);
 }
 
-// _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
+// _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] in ascending room id order
 function _encodeAreaCanonical(area, roomRawList) {
   const B = _canonBuf; B.reset();
   try { _encodeAreaBody(B, area, roomRawList); return B.bytes(); } finally { B.release(); }
@@ -3571,7 +3571,7 @@ function _encodeAreaCanonical(area, roomRawList) {
 function _encodeAreaBody(B, area, roomRawList) {
   B.u8(0x61); B.u8(0x34);                                          // 'a4'
   B.i32(area.id); B.str(area.name ?? '');
-  // v4: pola obszaru wczesniej poza suma (presence-guard zgodny z konwencja pomijania w pliku)
+  // v4: area fields earlier outside the checksum (presence-guard matching the file omission convention)
   if (area.grid_mode !== undefined) B.u8(area.grid_mode ? 1 : 0);
   if (area.is_zone !== undefined) B.u8(area.is_zone ? 1 : 0);
   if (area.zone_area_ref !== undefined) B.i32(area.zone_area_ref);
@@ -3607,8 +3607,8 @@ function _encodeColorsCanonical(B, colors) {
   }
 }
 
-// _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: pary [id, BigInt] posortowane po id rosnąco.
-// v4: bez globalnego rollupu pokoi — byl redundantny wzgledem rollupow obszarow (pokoj -> obszar -> plik).
+// _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: [id, BigInt] pairs sorted by ascending id.
+// v4: no global room rollup — it was redundant with the area rollups (room -> area -> file).
 function _encodeFileBody(B, colors, areaRaw) {
   B.u8(0x66); B.u8(0x34);                                        // 'f4'
   _encodeColorsCanonical(B, colors);
@@ -3622,7 +3622,7 @@ function _encodeFileCanonical(colors, areaRaw) {
 
 function _hex64(h) { return h.toString(16).padStart(16, '0'); }
 
-// _hashRoomCanon(room) — encode do wspolnego bufora + hash bez subarray; zwraca rejestr _xxh3pair.
+// _hashRoomCanon(room) — encode into the shared buffer + hash without subarray; returns the _xxh3pair register.
 function _hashRoomCanon(room) {
   const B = _canonBuf; B.reset();
   try { _encodeRoomBody(B, room); return _xxh3pair(B.b, B.n); } finally { B.release(); }
@@ -3632,12 +3632,12 @@ function _hashFileCanon(colors, areaRaw) {
   try { _encodeFileBody(B, colors, areaRaw); return _xxh3pair(B.b, B.n); } finally { B.release(); }
 }
 
-// ── Kodowanie obiektu meta (prefix 'm4') — checksums.meta, koperta v2 (D2) ──
-// Generyczne kodowanie wartosci JSON: tagi typow, klucze obiektow w porzadku
-// bajtowym UTF-8, rekurencja. Klucze z wartoscia undefined pomijane (jak w
-// serializacji); undefined/null w tablicach kodowane jako null. Spec: CANONICAL_V4.md
-// (sekcja „Meta object encoding"); wektory: tests/checksums/vectors_v4_meta.json.
-const _V4_META_MAX_DEPTH = 60;   // jak _DELTA_MAX_DEPTH — glebokie meta → wyjatek → verifyError (nigdy RangeError)
+// ── Meta object encoding (prefix 'm4') — checksums.meta, v2 envelope (D2) ──
+// Generic JSON value encoding: type tags, object keys in UTF-8 byte order,
+// recursive. Keys with undefined values are omitted (as in serialization);
+// undefined/null in arrays are encoded as null. Spec: CANONICAL_V4.md
+// ("Meta object encoding" section); vectors: tests/checksums/vectors_v4_meta.json.
+const _V4_META_MAX_DEPTH = 60;   // like _DELTA_MAX_DEPTH — deep meta -> exception -> verifyError (never RangeError)
 function _encodeMetaValue(B, v, depth) {
   if (depth > _V4_META_MAX_DEPTH) throw new Error('meta-canon-depth');
   if (v === null || v === undefined) { B.u8(0); return; }
@@ -3660,9 +3660,9 @@ function _encodeMetaValue(B, v, depth) {
     for (const k of ks) { B.str(k); _encodeMetaValue(B, v[k], depth + 1); }
     return;
   }
-  B.u8(0);   // typy spoza JSON (function/symbol) — nie wystepuja po JSON.parse; deterministycznie jako null
+  B.u8(0);   // non-JSON types (function/symbol) — cannot occur after JSON.parse; deterministically encoded as null
 }
-// _encodeMetaBody(B, meta) — 'm4' + cialo obiektu top-level (meta jest zawsze obiektem)
+// _encodeMetaBody(B, meta) — 'm4' + the top-level object body (meta is always an object)
 function _encodeMetaBody(B, meta) {
   B.u8(0x6D); B.u8(0x34);                                        // 'm4'
   const m = (meta && typeof meta === 'object' && !Array.isArray(meta)) ? meta : {};
@@ -3675,11 +3675,11 @@ function _hashMetaCanon(meta) {
   try { _encodeMetaBody(B, meta); return _xxh3pair(B.b, B.n); } finally { B.release(); }
 }
 
-// _computeV4Checksums(arkmap) — jeden wspólny przebieg liczenia sum alg v4.
-// Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt top-level checksums
-// (koperta v2: alg/file/meta/areas/rooms; meta = integrity meta, file = identity bez meta).
-// Może rzucić na uszkodzonych danych — wyjątek łapie WYŁĄCZNIE verifyChecksums (ścieżka wczytania);
-// ścieżki zapisu (addChecksums, baseInfo, delta) celowo fail-loud: wyjątek tam = bug aplikacji.
+// _computeV4Checksums(arkmap) — one shared pass computing alg v4 checksums.
+// Read-only (no cloning, no map mutation). Returns exactly the top-level checksums shape
+// (v2 envelope: alg/file/meta/areas/rooms; meta = integrity meta, file = identity without meta).
+// May throw on corrupt data — the exception is caught ONLY by verifyChecksums (load path);
+// write paths (addChecksums, baseInfo, delta) are deliberately fail-loud: an exception there = app bug.
 function _computeV4Checksums(arkmap) {
   const rooms = {}, areas = {};
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
@@ -3691,7 +3691,7 @@ function _computeV4Checksums(arkmap) {
     for (const room of sortedRooms) {
       const raw = _hashRoomCanon(room);
       rooms[String(room.id)] = _pairHex64(raw);
-      roomRawList.push([raw[0], raw[1]]);                            // kopia — rejestr wspoldzielony
+      roomRawList.push([raw[0], raw[1]]);                            // copy — the register is shared
     }
     const B = _canonBuf; B.reset();
     let aRaw;
@@ -3708,9 +3708,9 @@ function _computeV4Checksums(arkmap) {
   };
 }
 
-// addChecksums(arkmap) — stempluje meta.app_version (objete checksums.meta) i wstawia
-// sumy v4 na TOP-LEVEL arkmap.checksums (koperta v2). In-place, zwraca arkmap.
-// APP_VERSION moze nie istniec w kontekscie harnessow node (ekstrakcja blokow) — wtedy bez stempla.
+// addChecksums(arkmap) — stamps meta.app_version (covered by checksums.meta) and inserts
+// v4 checksums at TOP-LEVEL arkmap.checksums (v2 envelope). In-place, returns arkmap.
+// APP_VERSION may not exist in node harness contexts (block extraction) — then no stamp.
 function addChecksums(arkmap) {
   if (!arkmap.meta) arkmap.meta = {};
   if (typeof APP_VERSION !== 'undefined') arkmap.meta.app_version = APP_VERSION;
@@ -3718,16 +3718,16 @@ function addChecksums(arkmap) {
   return arkmap;
 }
 
-// verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v4. NIGDY nie rzuca (biegnie przed
-// dialogiem walidacji): uszkodzone dane → verifyError, a głos ma walidacja.
-// Czyta sumy z TOP-LEVEL arkmap.checksums (koperta v2); meta.checksums (uklad v1) jest ignorowane
-// — pliki v1 odrzuca wczesniej walidacja (format_version !== 2 = fatal).
-// Zwraca: { present, ok, fileOk, metaOk?, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
-//           missingRooms:[id], missingAreas:[{id,name}], extraRooms:[klucz], extraAreas:[klucz],
-//           computed? (pełny zestaw do reużycia), algMismatch?, verifyError? }
-// metaOk — osobny, INFORMACYJNY sygnal integrity meta (D2); nie wchodzi do ok.
-// Brak sekcji sum → present:false (cicho; świeże/zaimportowane pliki).
-// Alg inny niż v4 → present:true, ok:false, algMismatch — GŁOŚNO: cichy skip byłby dziurą downgrade'ową.
+// verifyChecksums(arkmap) — hierarchical alg v4 verification. NEVER throws (runs before
+// the validation dialog): corrupt data -> verifyError, and validation has the say.
+// Reads checksums from TOP-LEVEL arkmap.checksums (v2 envelope); meta.checksums (v1 layout) is ignored
+// — v1 files are rejected earlier by validation (format_version !== 2 = fatal).
+// Returns: { present, ok, fileOk, metaOk?, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
+//            missingRooms:[id], missingAreas:[{id,name}], extraRooms:[key], extraAreas:[key],
+//            computed? (full set for reuse), algMismatch?, verifyError? }
+// metaOk — a separate, INFORMATIONAL integrity-meta signal (D2); does not feed into ok.
+// No checksum section -> present:false (silent; fresh/imported files).
+// Alg other than v4 -> present:true, ok:false, algMismatch — LOUD: a silent skip would be a downgrade hole.
 function verifyChecksums(arkmap) {
   const empty = { badAreas: [], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] };
   const stored = arkmap.checksums;
@@ -3756,7 +3756,7 @@ function verifyChecksums(arkmap) {
       else if (storedR !== computed.rooms[sid]) badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
     }
   }
-  // sieroty: wpisy w zapisanych słownikach bez obiektu w pliku (deterministyczny porządek bajtowy kluczy)
+  // orphans: entries in the stored dictionaries with no object in the file (deterministic byte key order)
   const _keyOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const extraRooms = Object.keys(storedRooms).filter(id => !(id in computed.rooms)).sort(_keyOrder);
   const extraAreas = Object.keys(storedAreas).filter(id => !(id in computed.areas)).sort(_keyOrder);
@@ -3764,7 +3764,7 @@ function verifyChecksums(arkmap) {
   const fileOk = stored.file === computed.file;
   const ok = fileOk && !badAreas.length && !badRooms.length && !missingRooms.length
              && !missingAreas.length && !extraRooms.length && !extraAreas.length;
-  // D2: integrity meta — informacyjnie, poza ok; undefined gdy plik nie niesie checksums.meta
+  // D2: integrity meta — informational, outside ok; undefined when the file carries no checksums.meta
   const metaOk = (typeof stored.meta === 'string') ? stored.meta === computed.meta : undefined;
   return { present: true, ok, fileOk, metaOk, badAreas, badRooms, missingRooms, missingAreas, extraRooms, extraAreas, computed };
 }
@@ -3834,19 +3834,19 @@ function _canonicalizeMapForSave(map) {
 
 
 // ── dat-to-arkmap.js ──
-// Konwertuje Mudlet .dat (ArrayBuffer) → .arkmap JSON.
-// Wersja przeglądarkowa — używa mudlet_dat.js (bez Node.js/require).
+// Converts Mudlet .dat (ArrayBuffer) -> .arkmap JSON.
+// Browser version — uses mudlet_dat.js (no Node.js/require).
 
 
-// ─── hexToRgb / rgbToHex — konwersja kolorów (Pass 67) ──────────────────────
-// hexToRgb('#rrggbb') → [r, g, b]   — używana przy zmianie koloru CL/etykiety
+// ─── hexToRgb / rgbToHex — color conversion (Pass 67) ───────────────────────
+// hexToRgb('#rrggbb') -> [r, g, b]   — used when changing CL/label colors
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return [r, g, b];
 }
-// rgbToHex([r,g,b]) → '#rrggbb'     — używana do wypełnienia input type="color"
+// rgbToHex([r,g,b]) -> '#rrggbb'     — used to fill input type="color"
 function rgbToHex(arr) {
   return '#' + arr.slice(0, 3).map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
 }
@@ -3919,7 +3919,7 @@ function _datConvertRoom(raw, hashLookup) {
   const exitWeights = {};
   for (const [dir, w] of Object.entries(raw.exitWeights || {})) {
     const key = DIR_BY_LONG[dir] ? DIR_BY_LONG[dir].short : dir;
-    // audyt A3: waga 1 jest znacząca — w Mudlecie brak wpisu oznacza wagę 0, więc jawna 1 musi przetrwać round-trip
+    // audit A3: weight 1 is significant — in Mudlet a missing entry means weight 0, so an explicit 1 must survive the round-trip
     if (exits[key] !== undefined || specialExits[key] !== undefined || specialExits[dir] !== undefined)
       exitWeights[key] = w;
   }
@@ -3930,14 +3930,14 @@ function _datConvertRoom(raw, hashLookup) {
   )];
   if (exitLocks.length) room.exit_locks = exitLocks;
 
-  // Zachowaj wszystkie drzwi — Mudlet dopuszcza drzwi w kierunkach spoza exits/stubs
+  // Keep all doors — Mudlet allows doors in directions outside exits/stubs
   if (Object.keys(rawDoors).length) room.doors = rawDoors;
 
   if (raw.userData && Object.keys(raw.userData).length) room.user_data = raw.userData;
 
-  // audyt T3/W4: hidden (v22+ z pola; v20 z konwencji user_data) — utrzymać w modelu
+  // audit T3/W4: hidden (v22+ from the field; v20 from the user_data convention) — keep in the model
   if (raw.hidden || raw.userData?.['system.hidden'] === '1') room.hidden = true;
-  // audyt T3/Q2: v21+ symbolColor → konwencja fallback (lustro zapisu writeMudletRoom)
+  // audit T3/Q2: v21+ symbolColor -> fallback convention (mirror of writeMudletRoom)
   if (raw.symbolColor && raw.symbolColor.spec > 0) {
     const ud = room.user_data || (room.user_data = {});
     if (!ud['system.fallback_symbol_color']) {
@@ -3950,9 +3950,9 @@ function _datConvertRoom(raw, hashLookup) {
   for (const [dir, points] of Object.entries(raw.customLines || {})) {
     if (!Array.isArray(points)) continue; // skip null/invalid non-array entries; empty arrays (suppressors) pass through
     const key = DIR_BY_LONG[dir] ? DIR_BY_LONG[dir].short : dir;
-    const entry = { points: points.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]) }; // r4: Mudlet i tak zaokrągla do pikseli
+    const entry = { points: points.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]) }; // r4: Mudlet rounds to pixels anyway
     const color = raw.customLinesColor?.[dir];
-    entry.color = color ? [color.r, color.g, color.b] : [255, 0, 0]; // default Mudleta: czerwony
+    entry.color = color ? [color.r, color.g, color.b] : [255, 0, 0]; // Mudlet default: red
     const style = raw.customLinesStyle?.[dir];
     if (style && LINE_STR[style] && LINE_STR[style] !== 'solid') entry.style = LINE_STR[style];
     if (raw.customLinesArrow?.[dir]) entry.arrow = true;
@@ -3975,7 +3975,7 @@ function _datConvertLabel(raw) {
   return label;
 }
 
-// v1.43.3: neutralny fallback nazwy mapy — 'Arkadia' tylko dla map arkadianskich
+// v1.43.3: neutral map-name fallback — 'Arkadia' only for Arkadian maps
 function _datFallbackMapName(raw) {
   const probe = {
     meta:   { user_data: raw.mUserData || {} },
@@ -3987,7 +3987,7 @@ function _datFallbackMapName(raw) {
 function datToArkmap(arrayBuffer) {
   const raw = readMudletDat(arrayBuffer);
 
-  // Obsługa błędów parsera (nieznana wersja, zbyt stary/nowy plik)
+  // Parser error handling (unknown version, file too old/new)
   if (raw.error) {
     const err = new Error(raw.message || `arkmap: unsupported Mudlet DAT format (version ${raw.version})`);
     err.code = 'DAT_UNSUPPORTED_VERSION';
@@ -3997,8 +3997,8 @@ function datToArkmap(arrayBuffer) {
   const hashLookup = {};
   for (const [hash, id] of Object.entries(raw.mpRoomDbHashToRoomId || {})) hashLookup[id] = hash;
 
-  // audyt ext F2.10: ciche gubienie pokoi → warningi importu (wspolny kanal z F2.9)
-  // Arc 37: zbiór `referenced` usunięty — orphan liczony po fladze _roomId (patrz niżej).
+  // audit ext F2.10: silently lost rooms -> import warnings (shared channel with F2.9)
+  // Arc 37: the `referenced` set removed — orphans counted via the _roomId flag (see below).
   const importWarnings = [...(raw.importWarnings || [])];
 
   const areas = [];
@@ -4010,9 +4010,9 @@ function datToArkmap(arrayBuffer) {
     if (rawArea.zoneAreaRef !== 0) area.zone_area_ref = rawArea.zoneAreaRef;
     if (rawArea.userData && Object.keys(rawArea.userData).length) area.user_data = rawArea.userData;
     if (rawArea.pos && (rawArea.pos[0] || rawArea.pos[1] || rawArea.pos[2]))
-      area.pos = [rawArea.pos[0], rawArea.pos[1], rawArea.pos[2]]; // pozycja obszaru na overview mapie
+      area.pos = [rawArea.pos[0], rawArea.pos[1], rawArea.pos[2]]; // area position on the overview map
 
-    let _missing = 0;  // audyt ext F2.10
+    let _missing = 0;  // audit ext F2.10
     area.rooms = rawArea.rooms.map(roomId => {
       const r = raw.rooms[roomId]; if (!r) { _missing++; return null; }
       r._roomId = roomId;
@@ -4027,11 +4027,11 @@ function datToArkmap(arrayBuffer) {
   }
   areas.sort((a, b) => a.id - b.id);
 
-  // audyt ext F2.10: rekordy pokoi niewymienione w zadnym obszarze (orphans).
-  // Arc 37: pętla konwersji wyżej ustawia r._roomId na KAŻDYM rekordzie użytym w obszarze,
-  // więc orphan = rekord bez flagi — jeden przebieg zamiast Set + filter (regresja parse
-  // +59% przy 16x z benchmarku 2026-08-26). Zapis raw._roomId w builderze eksportu (~6642)
-  // dotyczy innego obiektu (inny cykl życia) — brak kolizji semantycznej.
+  // audit ext F2.10: room records not listed in any area (orphans).
+  // Arc 37: the conversion loop above sets r._roomId on EVERY record used in an area,
+  // so orphan = record without the flag — one pass instead of Set + filter (parse
+  // regression +59% at 16x in the 2026-08-26 benchmark). The raw._roomId write in the export
+  // builder (~6642) concerns a different object (different lifecycle) — no semantic collision.
   let _orphans = 0;
   for (const rid in raw.rooms) if (raw.rooms[rid]._roomId === undefined) _orphans++;
   if (_orphans) importWarnings.push(`${_orphans} room records outside area lists — skipped (orphan)`);
@@ -4057,7 +4057,7 @@ function datToArkmap(arrayBuffer) {
     },
     areas,
   };
-  // audyt ext F2.9/F2.10: warningi importu POZA modelem — nieenumerowalne (zero smieci w zapisie)
+  // audit ext F2.9/F2.10: import warnings live OUTSIDE the model — non-enumerable (zero garbage in saves)
   if (importWarnings.length)
     Object.defineProperty(map, '_importWarnings', { value: importWarnings, enumerable: false, configurable: true });
   return map;
@@ -4071,8 +4071,8 @@ function datToArkmap(arrayBuffer) {
 
 
 // ── arkmap-to-dat.js ──
-// Konwertuje .arkmap JSON → Mudlet map.dat (Uint8Array).
-// Wersja przeglądarkowa — używa mudlet_dat.js (bez Node.js/require).
+// Converts .arkmap JSON -> Mudlet map.dat (Uint8Array).
+// Browser version — uses mudlet_dat.js (no Node.js/require).
 
 
 function toQColor(arr, defaultAlpha = 255) {
@@ -4108,7 +4108,7 @@ function buildRoom(room, areaId) {
     weight: room.weight ?? 1, name: room.name ?? '', isLocked: room.locked ?? false,
     symbol: room.symbol ?? '', userData: room.user_data ?? {},
   };
-  if (room.hidden) out.hidden = true;  // audyt T3/W4: hidden idzie do raw — writeMudletRoom zapisze je w userData (v20 nie ma pola)
+  if (room.hidden) out.hidden = true;  // audit T3/W4: hidden goes to raw — writeMudletRoom writes it to userData (v20 has no field)
   for (const { short, long } of DIRS) out[long] = room.exits?.[short] ?? -1;
 
   out.doors = {};
@@ -4117,7 +4117,7 @@ function buildRoom(room, areaId) {
   out.stubs = (room.stubs || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
   out.exitWeights = {};
   for (const [key, w] of Object.entries(room.exit_weights || {})) {
-    const nk = DIR_BY_LONG[key] ? DIR_BY_LONG[key].short : key;  // audyt T4: symetria z konwerterem — long-name nie trafia do .dat
+    const nk = DIR_BY_LONG[key] ? DIR_BY_LONG[key].short : key;  // audit T4: symmetry with the converter — long names do not go into .dat
     out.exitWeights[nk] = w;
   }
   out.exitLocks = (room.exit_locks || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
@@ -4130,14 +4130,14 @@ function buildRoom(room, areaId) {
     out.rawSpecialExits[targetId].push(prefix + cmd);
   }
   out.mSpecialExits = room.special_exits ?? {};
-  out.mSpecialExitLocks = [...(room.special_exit_locks || [])];  // audyt T4/C-locks: semantyka v21 = lista KOMEND (stringow); sciezka rekonstrukcji writera robi lockSet.has(cmd) — wczesniej szukala stringow wsrod roomId (mina latentna)
+  out.mSpecialExitLocks = [...(room.special_exit_locks || [])];  // audit T4/C-locks: v21 semantics = a list of COMMANDS (strings); the writer reconstruction path does lockSet.has(cmd) — it used to look for strings among roomIds (latent mine)
 
   out.customLines = {}; out.customLinesArrow = {};
   out.customLinesColor = {}; out.customLinesStyle = {};
   for (const [key, cl] of Object.entries(room.custom_lines || {})) {
     out.customLines[key]      = (cl.points || []).map(p => [p[0], p[1]]);
     out.customLinesArrow[key] = cl.arrow ?? false;
-    out.customLinesColor[key] = toQColor(cl.color || [255, 0, 0]);  // audyt D-C1: default red per .arkmap spec (reader datToArkmap tez daje [255,0,0])
+    out.customLinesColor[key] = toQColor(cl.color || [255, 0, 0]);  // audit D-C1: default red per .arkmap spec (the datToArkmap reader also yields [255,0,0])
     out.customLinesStyle[key] = LINE_INT[cl.style] ?? LINE_INT.solid;
   }
   if (room.hash) out._hash = room.hash;
@@ -4200,11 +4200,11 @@ function arkmapToDat(arkmap) {
     labels[areaId] = (area.labels || []).map(buildLabel);
   }
 
-  // areaNames[-1] = nazwa mapy (z arkmap, nie nadpisuj meta.map_name)
-  // Obszar -1 to "Default Area" w Mudlet – musi być zachowany z arkmap.areas
-  // Nadpisanie tutaj powodowało błędną nazwę po roundtrip
+  // areaNames[-1] = map name (from arkmap; do not overwrite meta.map_name)
+  // Area -1 is "Default Area" in Mudlet — it must be preserved from arkmap.areas
+  // Overwriting it here produced a wrong name after the round-trip
 
-  // mAreaExits (wyjścia między obszarami)
+  // mAreaExits (exits between areas)
   // Mudlet format: QMultiMap<int srcRoomId, QPair<int targetRoomId, int dirCode>>
   // dirCode: 1–12 = standard (DIRS[].idx), 13 = DIR_OTHER (special exit)
   for (const [areaId, rawArea] of Object.entries(areas)) {
@@ -4238,9 +4238,9 @@ function arkmapToDat(arkmap) {
       Object.entries(arkmap.colors?.custom_env_colors ?? {})
         .filter(([k, v]) => {
           const id = parseInt(k);
-          // envId poza zakresem ANSI 1-255 → zawsze custom
+          // envId outside the ANSI 1-255 range -> always custom
           if (id < 1 || id > 255) return true;
-          // envId w zakresie 1-255: includue tylko jeśli wartość różni się od standardowej palety ANSI
+          // envId in 1-255: include only if the value differs from the standard ANSI palette
           const ansi = ansiPaletteRgb(id);
           if (!ansi) return true;
           const arr = Array.isArray(v) ? v : [v.r ?? 0, v.g ?? 0, v.b ?? 0];
@@ -4269,44 +4269,44 @@ function _findMissingSuppressors(roomById, roomArea) {
   const missing = [];
   for (const A of Object.values(roomById)) {
     for (const [dir, cl] of Object.entries(A.custom_lines || {})) {
-      if (!Array.isArray(cl.points)) continue;   // null-safety — pomiń zepsute wpisy (nie-tablica)
-      if (cl.points.length === 0) continue;      // A jest suppresorem — skip
-      if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit → trójkąt, nie linia; suppressor nigdy niepotrzebny
-      const targetId = A.exits?.[dir];            // tylko exits[], nie special_exits
+      if (!Array.isArray(cl.points)) continue;   // null-safety — skip broken entries (non-array)
+      if (cl.points.length === 0) continue;      // A is a suppressor — skip
+      if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit -> triangle, not a line; suppressor never needed
+      const targetId = A.exits?.[dir];            // exits[] only, not special_exits
       if (targetId === undefined) continue;        // orphan CL — skip
-      // audyt T4/Q5: martwy guard `targetId === -1` usuniety — model nie trzyma -1 (stuby sa w room.stubs)
+      // audit T4/Q5: dead guard `targetId === -1` removed — the model does not hold -1 (stubs live in room.stubs)
       const B = roomById[targetId];
-      if (!B) continue;                            // target nie istnieje — skip
+      if (!B) continue;                            // target does not exist — skip
       if (roomArea[A.id] !== roomArea[B.id]) continue; // cross-area — skip
-      if (A.z !== B.z) continue;                   // cross-Z → drugi pokój nierenderowany na tym poziomie, brak podwójnej linii
+      if (A.z !== B.z) continue;                   // cross-Z -> the other room is not rendered on this level, no double line
       const opp = OPPOSITE[dir];
-      if (!opp) continue;                          // nieznany kierunek — skip
-      // Suppressor potrzebny TYLKO gdy B ma wyjście powrotne do A w kierunku opp
-      // (bo tylko wtedy Mudlet rysuje domyślną linię z B, którą trzeba stłumić)
-      if (B.exits?.[opp] !== A.id) continue;       // B nie ma reciprocal exit — skip
-      // Arc 37 (PRACA 13): dawny skip multi-edge (otherDefaultEdge) usuniety — opieral
-      // sie na dedupie PAR pokoi z renderera Delwinga (exitsRendered). Nasz renderer
-      // (drawExits) rysuje linie domyslne per (pokoj, kierunek) i kazdy kierunek tlumi
-      // wlasna custom_line — przy multi-edge A↔B linia B→A (opp) i tak powstaje,
-      // wiec suppressor jest nadal POTRZEBNY. Skip cross-area powyzej ZOSTAJE:
-      // swiadoma decyzja — wyjscia cross-area renderuja sie jako strzalki/etykiety,
-      // nie jako domyslne linie, wiec podwojnej linii tam nie ma.
+      if (!opp) continue;                          // unknown direction — skip
+      // A suppressor is needed ONLY when B has a return exit to A in direction opp
+      // (because only then does Mudlet draw a default line from B that must be suppressed)
+      if (B.exits?.[opp] !== A.id) continue;       // B has no reciprocal exit — skip
+      // Arc 37 (PRACA 13): the old multi-edge skip (otherDefaultEdge) was removed — it relied
+      // on PAIR dedup from Delwing's renderer (exitsRendered). Our renderer
+      // (drawExits) draws default lines per (room, direction) and each direction suppresses
+      // its own custom_line — with multi-edge A<->B the B->A (opp) line is drawn anyway,
+      // so the suppressor is still NEEDED. The cross-area skip above STAYS:
+      // a deliberate decision — cross-area exits render as arrows/labels,
+      // not as default lines, so there is no double line there.
       const bcl = B.custom_lines?.[opp];
-      if (!bcl) {                                  // brak jakiejkolwiek CL w kierunku opp → suppressor potrzebny
+      if (!bcl) {                                  // no CL at all in direction opp -> suppressor needed
         missing.push({ roomA: A.id, dir, roomB: B.id, oppDir: opp, sourceCL: cl });
       }
     }
   }
   return missing;
 }
-// checkSuppressors() — stan aplikacji (edycja / bramka zapisu / przycisk walidacji).
+// checkSuppressors() — application state (editing / save gate / validation button).
 function checkSuppressors() {
   return _findMissingSuppressors(state.roomById, state.roomArea);
 }
-// checkSuppressorsInMap — wariant dla sparsowanej mapy PRZED applyMap (val-modal
-// przy loadzie, Arc 29). Read-only: buduje lekkie indeksy ad hoc i NIGDY nie mutuje
-// mapy (obiekt idzie potem do applyMap). NIGDY nie rzuca — malformed pokoje pomija,
-// load nie moze sie wywrocic przez ten check.
+// checkSuppressorsInMap — variant for a parsed map BEFORE applyMap (val-modal
+// on load, Arc 29). Read-only: builds light ad-hoc indexes and NEVER mutates
+// the map (the object goes to applyMap afterwards). NEVER throws — skips malformed
+// rooms; the load must not be toppled by this check.
 function checkSuppressorsInMap(map) {
   try {
     const roomById = {}, roomArea = {};
@@ -5324,8 +5324,8 @@ function _diffEq(a, b) { return stableStringify(a) === stableStringify(b); }
 function _diffPick(c, fields) { const o = {}; for (const f of fields) if (c[f] !== undefined) o[f] = c[f]; return o; }
 function _diffExcept(c, fields) { const o = Object.assign({}, c); for (const f of fields) delete o[f]; return o; }
 
-// Kanon pokoju do porownan — ta sama konwencja co _computeBaseInfo (strip defaultow
-// + posortowane pola tablicowe): ta sama mapa z .dat i .arkmap daje PUSTA kalke.
+// Room canon for comparisons — same convention as _computeBaseInfo (default stripping
+// + sorted array fields): the same map from .dat and .arkmap yields an EMPTY delta.
 function _diffCanonRoom(room) {
   const c = JSON.parse(JSON.stringify(room));
   delete c.area;
@@ -5338,8 +5338,8 @@ function _diffCanonRoom(room) {
   return c;
 }
 
-// Trym kaskadowy: dokladnie zakres doFn deleteRoom — wyjscia i special exits
-// wskazujace skasowane pokoje znikaja wraz z polami pobocznymi na tych kierunkach.
+// Cascade trim: exactly the scope of doFn deleteRoom — exits and special exits
+// pointing at deleted rooms vanish together with the side fields on those directions.
 function _diffTrimRoomToDeleted(room, deletedRooms) {
   for (const dir of Object.keys(room.exits || {})) {
     if (deletedRooms.has(room.exits[dir])) {
@@ -5363,15 +5363,15 @@ function _diffTrimRoomToDeleted(room, deletedRooms) {
   ['exit_locks','special_exit_locks'].forEach(k => { if (Array.isArray(room[k]) && !room[k].length) delete room[k]; });
 }
 
-// before-snapshot dla opow full-state (EDIT_ROOM/EDIT_EXIT): stan pokoju
-// po kaskadzie delete'ow i po ruchu — zgodny z cieniem classifyDelta w chwili opu.
-// Pozycje bierzemy z SUROWEGO pokoju docelowego (nie z kanonu — kanon normalizuje
-// z=0, a _deltaRoomCmp w classify porownuje snapshoty pelne, z zachowane).
+// before-snapshot for full-state ops (EDIT_ROOM/EDIT_EXIT): the room state
+// after the delete cascade and after the move — matching classifyDelta's shadow at op time.
+// Positions are taken from the RAW destination room (not the canon — the canon normalizes
+// z=0, and _deltaRoomCmp in classify compares full snapshots, z preserved).
 function _diffBeforeSnapshot(srcRoom, deletedRooms, posRoom) {
-  // posRoom = skad pozycja x/y/z: pokoj DOCZELOWY, gdy kalka najpierw rusza pokoj
-  // (MOVE_ROOM przed roomOps — cien klasyfikatora jest juz na nowej pozycji);
-  // pokoj ZRODLOWY, gdy ten sam op SAM jest ruchem (fallback cyklu) albo gdy
-  // ruchu w ogole nie ma (EDIT_ROOM resid — taki pokoj nigdy nie dostaje MOVE_ROOM).
+  // posRoom = where x/y/z come from: the DESTINATION room when the delta moves the room first
+  // (MOVE_ROOM before roomOps — the classifier shadow is already at the new position);
+  // the SOURCE room when the same op IS the move itself (cycle fallback) or when
+  // there is no move at all (EDIT_ROOM resid — such a room never gets a MOVE_ROOM).
   const b = JSON.parse(JSON.stringify(srcRoom));
   _diffTrimRoomToDeleted(b, deletedRooms);
   b.x = posRoom.x; b.y = posRoom.y;
@@ -5412,7 +5412,7 @@ function diffMaps(srcMap, dstMap, opts) {
 
   const out = { addArea:[], editArea:[], envColor:[], addRoom:[], moveArea:[], delRoom:[],
     roomOps:[], labelAdd:[], labelEdit:[], labelDel:[], delArea:[] };
-  const paintGroups = new Map();  // klucz zmiany -> changes[]
+  const paintGroups = new Map();  // change key -> changes[]
   const moveCands = [];           // { id, name, area, from{x,y,z}, to{x,y,z}, sRoom, dRoom }
 
   // ── obszary ──
@@ -5453,7 +5453,7 @@ function diffMaps(srcMap, dstMap, opts) {
     stats.envColor++;
   }
 
-  // ── pokoje ──
+  // ── rooms ──
   const deletedRooms = new Set(), addedRooms = new Set();
   const allRoomIds = [...new Set([...srcRooms.keys(), ...dstRooms.keys()])].sort((a, b) => a - b);
   for (const id of allRoomIds) {
@@ -5514,7 +5514,7 @@ function diffMaps(srcMap, dstMap, opts) {
 
     const delExitDirs = new Set();
     if (exitsDiffer && !exitRestDiffer) {
-      // granularne DELETE/ADD per kierunek (bez snapshotow — najczytelniejsza historia)
+      // granular DELETE/ADD per direction (no snapshots — the most readable history)
       const dirs = [...new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})])].sort(_diffDirCmp);
       for (const dir of dirs) {
         const sT = (cs.exits || {})[dir], dT = (cd.exits || {})[dir];
@@ -5545,7 +5545,7 @@ function diffMaps(srcMap, dstMap, opts) {
         }
       }
     } else if (exitsDiffer || exitRestDiffer) {
-      // zmiany mieszane rodziny wyjsc → jeden EDIT_EXIT (full snapshoty; pokrywa tez paint/CL)
+      // mixed exit-family changes -> one EDIT_EXIT (full snapshots; also covers paint/CL)
       const dirs = new Set();
       for (const k of new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})]))
         if ((cs.exits || {})[k] !== (cd.exits || {})[k]) dirs.add(k);
@@ -5574,7 +5574,7 @@ function diffMaps(srcMap, dstMap, opts) {
           afterEnv: cd.env ?? null, afterSymbol: cd.symbol ?? '' });
       }
       if (clDiffer) {
-        // kierunki z DELETE_EXIT: CL na nich znika razem z wyjsciem — traktujemy zrodlo jako puste
+        // directions with DELETE_EXIT: their CL vanishes with the exit — treat the source as empty
         const dirs = [...new Set([...Object.keys(clS), ...Object.keys(clD)])].sort(_diffDirCmp);
         for (const dir of dirs) {
           const sC = delExitDirs.has(dir) ? undefined : clS[dir];
@@ -5598,8 +5598,8 @@ function diffMaps(srcMap, dstMap, opts) {
     }
   }
 
-  // ── ruchy: emisja w kolejnosci odblokowujacej; cykl (np. swap) → fallback EDIT_ROOM ──
-  const occ = new Map();  // "areaId:x,y,z" -> roomId (stan po delete'ach, z dodanymi pokojami)
+  // ── moves: emission in unblocking order; a cycle (e.g. swap) -> EDIT_ROOM fallback ──
+  const occ = new Map();  // "areaId:x,y,z" -> roomId (state after deletes, with added rooms)
   const occKey = (areaId, x, y, z) => areaId + ':' + x + ',' + y + ',' + (z ?? 0);
   for (const [id, s] of srcRooms) {
     if (deletedRooms.has(id)) continue;
@@ -5658,7 +5658,7 @@ function diffMaps(srcMap, dstMap, opts) {
     stats.paintBatches++; stats.paintRooms += n;
   }
 
-  // ── etykiety (pomijamy obszary skasowane — etykiety znikaja kaskadowo) ──
+  // ── labels (skipping deleted areas — labels vanish in the cascade) ──
   for (const aid of allAreaIds) {
     if (deletedAreas.has(aid)) continue;
     const sA = srcAreas.get(aid), dA = dstAreas.get(aid);

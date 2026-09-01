@@ -5,13 +5,13 @@
 
 // ── mudlet_dat.js ──
 /**
- * mudlet_dat.js — pełny port binarnego formatu Mudlet map.dat dla przeglądarki.
+ * mudlet_dat.js — full port of the Mudlet map.dat binary format for the browser.
  *
- * Format oparty na Qt QDataStream (big-endian).
- * Brak zależności zewnętrznych — działa w przeglądarce i Node.js.
+ * Format based on Qt QDataStream (big-endian).
+ * No external dependencies — runs in the browser and Node.js.
  *
- * Export:
- *   readMudletDat(arrayBuffer)  → raw map object (identyczny z mudlet_reader.read)
+ * Exports:
+ *   readMudletDat(arrayBuffer)  → raw map object (identical to mudlet_reader.read)
  *   writeMudletDat(mapObj)      → Uint8Array
  */
 
@@ -27,8 +27,8 @@ class ReadBuffer {
     this.view = new DataView(this.buf);
     this.pos  = 0;
   }
-  // audyt A7: bounds-check przed każdym odczytem — kontrolowany błąd formatu zamiast surowego
-  // RangeError (trafia do toastu przez catch w loadDat); pos zostaje nienaruszony przy rzuceniu
+  // audit A7: bounds-check before every read — a controlled format error instead of a raw
+  // RangeError (reaches the toast via catch in loadDat); pos stays untouched when throwing
   _need(n) {
     if (n < 0 || n > this.remaining()) {
       const err = new Error(`arkmap: corrupt or truncated .dat: read of ${n} B at offset ${this.pos}, file is ${this.buf.byteLength} B`);
@@ -120,8 +120,8 @@ function writeQColor(w, c) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // QFont — Qt font descriptor
-//   NOTE: stretch jest zapisywany z przesunięciem o 8 bitów (<< 8) — zachowujemy
-//         to zachowanie (błąd w oryginalnym mudlet_reader.js, ale kompatybilny).
+//   NOTE: stretch is written shifted by 8 bits (<< 8) — we preserve this
+//         behavior (a bug in the original mudlet_reader.js, but compatible).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQFont(r) {
@@ -134,7 +134,7 @@ function readQFont(r) {
   r.readInt8();                          // padding byte
   const weight        = r.readUInt8();
   const fontBits      = r.readUInt8();
-  const stretch       = r.readUInt16(); // raw — w pliku Mudlet: wartość prosta, po zapisu przez nas: stretch<<8
+  const stretch       = r.readUInt16(); // raw — in a Mudlet file: plain value; after we write it: stretch<<8
   const extFontBits   = r.readUInt8();
   const letterSpacing = r.readInt32();
   const wordSpacing   = r.readInt32();
@@ -169,7 +169,7 @@ function writeQFont(w, f) {
   w.writeZero(1);                                      // padding
   w.writeUInt8( o.weight          ?? 0);
   w.writeUInt8( o.fontBits        ?? 0);
-  w.writeUInt16((o.stretch        ?? 100) << 8);       // oryginalny bug — zachowany
+  w.writeUInt16((o.stretch        ?? 100) << 8);       // original bug — preserved
   w.writeUInt8( o.extendedFontBits ?? 0);
   w.writeInt32( o.letterSpacing   ?? 0);
   w.writeInt32( o.wordSpacing     ?? 0);
@@ -178,7 +178,7 @@ function writeQFont(w, f) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QPoint (para double) i QVector (trójka double)
+// QPoint (pair of doubles) and QVector (triple of doubles)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQPoint(r)  { return [r.readDouble(), r.readDouble()]; }
@@ -191,24 +191,24 @@ function writeQVector(w, v) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QPixMap — zawiera dane PNG lub jest pusty
+// QPixMap — holds PNG data or is empty
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function readQPixMap(r) {
-  r.readUInt32();                         // nagłówkowy uint32 (zawsze 1 lub ignorowany)
+  r.readUInt32();                         // header uint32 (always 1 or ignored)
   const startPos = r.pos;
   if (r.remaining() < 8) return new Uint8Array(0);
 
-  // audyt A9: pełna 8-bajtowa sygnatura PNG + parsowanie chunków zamiast skanowania bajtów za IEND
+  // audit A9: full 8-byte PNG signature + chunk parsing instead of scanning bytes past IEND
   const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
   for (const s of sig) {
-    if (r.readUInt8() !== s) { r.pos = startPos; return new Uint8Array(0); }  // nie PNG — cofnij
+    if (r.readUInt8() !== s) { r.pos = startPos; return new Uint8Array(0); }  // not a PNG — rewind
   }
 
-  // Chunki: uint32 length BE | typ 4 B | data(length) | CRC 4 B; koniec na IEND.
-  // Bajty "IEND" wewnątrz danych IDAT nie mylą parsera (dawniej ucinały pixmapę).
-  // Uszkodzony/ucięty chunk → kontrolowany błąd przez _need (audyt A7) — pozycja strumienia
-  // byłaby nieodwracalna, więc ciche pochłanianie reszty pliku (dawne zachowanie) było gorsze.
+  // Chunks: uint32 length BE | type 4 B | data(length) | CRC 4 B; ends at IEND.
+  // "IEND" bytes inside IDAT data do not confuse the parser (they used to truncate the pixmap).
+  // A corrupt/truncated chunk -> controlled error via _need (audit A7) — the stream position
+  // would be unrecoverable, so silently swallowing the rest of the file (old behavior) was worse.
   for (;;) {
     const len = r.readUInt32();
     const t0 = r.readUInt8(), t1 = r.readUInt8(), t2 = r.readUInt8(), t3 = r.readUInt8();
@@ -219,17 +219,17 @@ function readQPixMap(r) {
 
   const endPos = r.pos;
   r.pos = startPos;
-  return r.readBytes(endPos - startPos).slice();  // kopia PNG
+  return r.readBytes(endPos - startPos).slice();  // PNG copy
 }
 
 function writeQPixMap(w, bytes) {
-  w.writeUInt32(1);                       // nagłówkowy uint32
+  w.writeUInt32(1);                       // header uint32
   if (bytes && bytes.length > 0) w.writeBytes(bytes);
-  // puste: tylko uint32(1), przy odczycie brak PNG → pusty
+  // empty: only uint32(1); on read, no PNG -> empty
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Pomocnicze sortowanie kluczy całkowitych
+// Integer-key sorting helper
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function cmpInt(a, b) { return parseInt(a[0]) - parseInt(b[0]); }
@@ -241,18 +241,18 @@ function cmpIntMinusFirst(a, b) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// QMap / QMultiMap — różne warianty typów kluczy i wartości
+// QMap / QMultiMap — various key/value type combinations
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// audyt ext F2.8: liczniki sekcji czytane jako int32 (ze znakiem) — ujemny = uszkodzony
-// plik, NIE „pusta sekcja". Liczniki uint32 (QMap/QList) ujemne byc nie moga; skorumpowane
-// wielkie wartosci i tak koncza sie kontrolowanym bledem bounds-checku ReadBuffer (audyt A7).
+// audit ext F2.8: section counters are read as int32 (signed) — negative = corrupt
+// file, NOT an "empty section". uint32 counters (QMap/QList) cannot be negative; corrupted
+// huge values end in a controlled ReadBuffer bounds-check error anyway (audit A7).
 function _datCounter(n) {
   if (n < 0) { const err = new Error('arkmap: corrupt .dat (negative section count)'); err.code = 'DAT_NEGATIVE_COUNT'; throw err; }
   return n;
 }
 
-// QMap<QInt, QInt> — np. envColors, xmaxForZ itd.
+// QMap<QInt, QInt> — e.g. envColors, xmaxForZ etc.
 function readQMapII(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = r.readInt32(); o[k] = v; }
@@ -264,7 +264,7 @@ function writeQMapII(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); w.writeInt32(v); }
 }
 
-// QMap<QInt, QString> — np. areaNames (z kluczem -1 na początku)
+// QMap<QInt, QString> — e.g. areaNames (with key -1 first)
 function readQMapIS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = readQString(r); o[k] = v; }
@@ -276,7 +276,7 @@ function writeQMapIS(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); writeQString(w, v); }
 }
 
-// QMap<QInt, QColor> — np. mCustomEnvColors
+// QMap<QInt, QColor> — e.g. mCustomEnvColors
 function readQMapIC(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = r.readInt32(), v = readQColor(r); o[k] = v; }
@@ -288,16 +288,16 @@ function writeQMapIC(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); writeQColor(w, v); }
 }
 
-// audyt T5/F1: bezpieczny zapis klucza do plain-object mapy — "__proto__" przez
-// defineProperty (zwykly assign jest w JS cicho ignorowany, klucz ginial bez sladu).
-// enumerable:true WYMAGANE: JSON.stringify, Object.entries i zapis .arkmap/.dat musza
-// widziec klucz; writable/configurable:true zeby edytor mogl go pozniej nadpisac.
+// audit T5/F1: safe key insertion into a plain-object map — "__proto__" via
+// defineProperty (a plain assignment is silently ignored in JS; the key vanished without a trace).
+// enumerable:true is REQUIRED: JSON.stringify, Object.entries and .arkmap/.dat writes must
+// see the key; writable/configurable:true so the editor can overwrite it later.
 function _setMapKey(o, k, v) {
   if (k === '__proto__') Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true });
   else o[k] = v;
 }
 
-// QMap<QString, QUInt> — np. mpRoomDbHashToRoomId
+// QMap<QString, QUInt> — e.g. mpRoomDbHashToRoomId
 function readQMapSU(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); _setMapKey(o, k, v); }
@@ -309,7 +309,7 @@ function writeQMapSU(w, o) {
   for (const [k, v] of e) { writeQString(w, k); w.writeUInt32(v); }
 }
 
-// QMap<QString, QString> — np. userData, mUserData
+// QMap<QString, QString> — e.g. userData, mUserData
 function readQMapSS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = readQString(r); _setMapKey(o, k, v); }
@@ -321,7 +321,7 @@ function writeQMapSS(w, o) {
   for (const [k, v] of e) { writeQString(w, k); writeQString(w, v); }
 }
 
-// QMap<QString, QInt> — np. exitWeights, doors, mRoomIdHash
+// QMap<QString, QInt> — e.g. exitWeights, doors, mRoomIdHash
 function readQMapSI(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readInt32(); _setMapKey(o, k, v); }
@@ -396,14 +396,14 @@ function writeQMapSLP(w, o) {
 function readQMMUS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) {
-    const k = r.readInt32(), v = readQString(r);  // audyt T4/W2: klucz = id pokoi (int32, ze znakiem)
+    const k = r.readInt32(), v = readQString(r);  // audit T4/W2: key = room id (int32, signed)
     if (!o[k]) o[k] = [];
     o[k].push(v);
   }
   return o;
 }
 function writeQMMUS(w, o) {
-  // reversed object entries — identyczne z oryginałem
+  // reversed object entries — identical to the original
   const entries = Object.entries(o || {}).reverse();
   let total = 0;
   const pairs = [];
@@ -460,34 +460,34 @@ function writeQListU(w, a) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Typy złożone Mudlet
+// Mudlet compound types
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wersje formatu Mudlet DAT — do sprawdzenia przy odczycie
+// Mudlet DAT format versions — checked on read
 //
-//  v17 — xminForZ/ymaxForZ/itp., mUserData mapy
-//  v18 — rooms jako QSet, mRoomIdHash per profil
-//  v19 — mSymbol jako QString, mapSymbolFont bezpośrednio
-//  v20 — customLines lowercase keys, QColor zamiast QList<int>  ← aktualna produkcja
-//  v21 — specialExits nowy format (QMap<cmd,id>), mSpecialExitLocks osobno,
-//         mSymbolColor bezpośrednio, labele w TArea, mLast2DMapZoom
-//  v22 — pole hidden pokoju
-//  v23+ — nieznane: bezpieczny fallback, zachowaj dane bez interpretacji
+//  v17 — xminForZ/ymaxForZ/etc., map mUserData
+//  v18 — rooms as QSet, mRoomIdHash per profile
+//  v19 — mSymbol as QString, mapSymbolFont inline
+//  v20 — customLines lowercase keys, QColor instead of QList<int>  ← current production
+//  v21 — specialExits new format (QMap<cmd,id>), mSpecialExitLocks separate,
+//         mSymbolColor inline, labels in TArea, mLast2DMapZoom
+//  v22 — room hidden field
+//  v23+ — unknown: safe fallback, keep data without interpretation
 //
-// Przy zapisie zawsze piszemy v20 (aktualna wersja produkcyjna Mudleta).
-// Przy odczycie obsługujemy v17–v22 ze wszystkimi bramkami wersji.
-// Pliki nowsze niż MUDLET_DAT_MAX_SUPPORTED_VERSION są odrzucane z błędem.
+// On write we always emit v20 (Mudlet's current production version).
+// On read we support v17–v22 with all version gates.
+// Files newer than MUDLET_DAT_MAX_SUPPORTED_VERSION are rejected with an error.
 // ─────────────────────────────────────────────────────────────────────────────
-const MUDLET_DAT_MIN_VERSION     = 17;   // minimum które obsługujemy
-const MUDLET_DAT_WRITE_VERSION   = 20;   // wersja którą zawsze piszemy
-const MUDLET_DAT_MAX_SUPPORTED_VERSION = 22;  // maximum które umiemy czytać
+const MUDLET_DAT_MIN_VERSION     = 17;   // minimum we support
+const MUDLET_DAT_WRITE_VERSION   = 20;   // version we always write
+const MUDLET_DAT_MAX_SUPPORTED_VERSION = 22;  // maximum we can read
 
 // ─────────────────────────────────────────────────────────────────────────────
 // readMudletArea(r, version)
 // ─────────────────────────────────────────────────────────────────────────────
 function readMudletArea(r, version) {
-  const rooms     = readQListI(r);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
+  const rooms     = readQListI(r);  // audit T4/W1: room id list = int32 (signed)
   const zLevels   = readQListI(r);
   const mAreaExits = readQMMIPP(r);
   const gridMode  = !!r.readInt8();
@@ -502,7 +502,7 @@ function readMudletArea(r, version) {
   const isZone    = !!r.readInt8();
   const zoneAreaRef = r.readInt32();
 
-  // v21+: mLast2DMapZoom zapisany bezpośrednio przed userData
+  // v21+: mLast2DMapZoom stored inline before userData
   let mLast2DMapZoom = null;
   if (version >= 21) {
     mLast2DMapZoom = r.readDouble();
@@ -510,7 +510,7 @@ function readMudletArea(r, version) {
 
   const userData  = readQMapSS(r);
 
-  // v21+: labele wbudowane w obszar (wcześniej były globalnie po areaCount)
+  // v21+: labels embedded in the area (previously global after areaCount)
   let areaLabels = null;
   if (version >= 21) {
     const labelCount = _datCounter(r.readInt32());  // audyt ext F2.8
@@ -525,17 +525,17 @@ function readMudletArea(r, version) {
     max_x, max_y, max_z, min_x, min_y, min_z,
     span, xmaxForZ, ymaxForZ, xminForZ, yminForZ,
     pos, isZone, zoneAreaRef,
-    mLast2DMapZoom, // null dla v17-v20 (odczytany z userData fallback przez Mudlet)
+    mLast2DMapZoom, // null for v17-v20 (read from userData fallback by Mudlet)
     userData,
-    areaLabels,    // null dla v17-v20 (labele są globalnie)
+    areaLabels,    // null for v17-v20 (labels are global)
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// writeMudletArea — zawsze pisze w formacie v20
+// writeMudletArea — always writes in v20 format
 // ─────────────────────────────────────────────────────────────────────────────
 function writeMudletArea(w, a) {
-  writeQListI(w,  a.rooms      ?? []);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
+  writeQListI(w,  a.rooms      ?? []);  // audit T4/W1: room id list = int32 (signed)
   writeQListI(w,  a.zLevels    ?? []);
   writeQMMIPP(w,  a.mAreaExits ?? {});
   w.writeInt8(a.gridMode ? 1 : 0);
@@ -549,14 +549,14 @@ function writeMudletArea(w, a) {
   writeQVector(w, a.pos        ?? [0, 0, 0]);
   w.writeInt8(a.isZone ? 1 : 0);
   w.writeInt32(a.zoneAreaRef   ?? 0);
-  // v20: userData (mLast2DMapZoom idzie do userData["system.fallback_map2DZoom"] jeśli potrzeba)
+  // v20: userData (mLast2DMapZoom goes to userData["system.fallback_map2DZoom"] if needed)
   const ud = { ...(a.userData ?? {}) };
   if (a.mLast2DMapZoom != null && !ud['system.fallback_map2DZoom']) {
-    // Jeśli dane przyszły z v21+ mamy zoom bezpośrednio — zapisz jako fallback dla v20
+    // If data came from v21+ we have the zoom inline — write it as a fallback for v20
     ud['system.fallback_map2DZoom'] = String(a.mLast2DMapZoom);
   }
   writeQMapSS(w, ud);
-  // v20: labele NIE są tutaj — są zapisywane globalnie po mRoomIdHash
+  // v20: labels are NOT here — they are written globally after mRoomIdHash
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -572,29 +572,29 @@ function readMudletRoom(r, version) {
   const up          = r.readInt32(), down      = r.readInt32();
   const inn         = r.readInt32(), out       = r.readInt32();
   const environment = r.readInt32();
-  const weight      = Math.max(1, r.readInt32());  // Mudlet wymusza min=1
+  const weight      = Math.max(1, r.readInt32());  // Mudlet enforces min=1
   const name        = readQString(r);
   const isLocked    = !!r.readInt8();
 
-  // v22+: hidden (pokój niewidoczny na mapie)
+  // v22+: hidden (room invisible on the map)
   let hidden = false;
   if (version >= 22) {
     hidden = !!r.readInt8();
   }
 
-  // specialExits: format zmienił się w v21
-  let rawSpecialExits = {};   // stary format (v6-v20): QMultiMap<int, "0cmd"/"1cmd">
+  // specialExits: format changed in v21
+  let rawSpecialExits = {};   // old format (v6-v20): QMultiMap<int, "0cmd"/"1cmd">
   let mSpecialExits   = {};   // cmd → roomId
-  let mSpecialExitLocks = []; // zablokowane (stary: lista roomId, v21+: lista cmd)
+  let mSpecialExitLocks = []; // locked (old: roomId list, v21+: cmd list)
 
   if (version >= 21) {
-    // v21+: QMap<QString, int>  cmd → roomId  (zamki osobno jako QSet<QString> na końcu)
+    // v21+: QMap<QString, int>  cmd → roomId  (locks separate as QSet<QString> at the end)
     const newSpecialExits = readQMapSI(r);
     mSpecialExits = newSpecialExits;
-    // Zrekonstruuj rawSpecialExits dla kompatybilności wstecznej przy zapisie v20
+    // Reconstruct rawSpecialExits so v20 writes keep the old layout
     for (const [cmd, tid] of Object.entries(newSpecialExits)) {
       rawSpecialExits[tid] = rawSpecialExits[tid] ?? [];
-      rawSpecialExits[tid].push('0' + cmd); // zamki dodamy po odczytaniu mSpecialExitLocks
+      rawSpecialExits[tid].push('0' + cmd); // locks are added after mSpecialExitLocks is read
     }
   } else {
     // v6-v20: QMultiMap<int, QString>  roomId → "0cmd"/"1cmd"
@@ -609,17 +609,17 @@ function readMudletRoom(r, version) {
     }
   }
 
-  // symbol: format zmienił się w v19
+  // symbol: format changed in v19
   let symbol = '';
   if (version >= 19) {
     symbol = readQString(r);
   } else {
-    // v9-v18: stary qint8 (ASCII)
+    // v9-v18: old qint8 (ASCII)
     const oldChar = r.readInt8();
     if (oldChar > 32) symbol = String.fromCharCode(oldChar);
   }
 
-  // v21+: mSymbolColor bezpośrednio jako QColor
+  // v21+: mSymbolColor inline as QColor
   let symbolColor = null;
   if (version >= 21) {
     symbolColor = readQColor(r);
@@ -627,12 +627,12 @@ function readMudletRoom(r, version) {
 
   const userData = readQMapSS(r);
 
-  // Jeśli v19-v20: symbolColor może być w userData jako fallback
+  // If v19-v20: symbolColor may be in userData as a fallback
   if (version < 21 && userData['system.fallback_symbol_color']) {
-    // Zostawiamy w userData — Mudlet sam to obsługuje przy wczytaniu
+    // Left in userData — Mudlet handles it itself on load
   }
 
-  // customLines: format zmienił się w v20 (lowercase keys, QColor zamiast QList<int>)
+  // customLines: format changed in v20 (lowercase keys, QColor instead of QList<int>)
   let customLines = {}, customLinesArrow = {}, customLinesColor = {}, customLinesStyle = {};
   if (version >= 20) {
     customLines      = readQMapSLP(r);
@@ -640,7 +640,7 @@ function readMudletRoom(r, version) {
     customLinesColor = readQMapSC(r);
     customLinesStyle = readQMapSU2(r);
   } else if (version >= 11) {
-    // v11-v19: uppercase keys, QList<int> dla kolorów, QString dla stylu
+    // v11-v19: uppercase keys, QList<int> for colors, QString for style
     const oldLines = readQMapSLP(r);
     for (const [k, v] of Object.entries(oldLines)) {
       customLines[k.toLowerCase()] = v;
@@ -649,7 +649,7 @@ function readMudletRoom(r, version) {
     for (const [k, v] of Object.entries(oldArrow)) {
       customLinesArrow[k.toLowerCase()] = v;
     }
-    // stary kolor: QMap<QString, QList<int>>
+    // old color: QMap<QString, QList<int>>
     const n = r.readUInt32();
     for (let i = 0; i < n; i++) {
       const k = readQString(r);
@@ -660,7 +660,7 @@ function readMudletRoom(r, version) {
         customLinesColor[k.toLowerCase()] = { spec:1, alpha:255, r:rgb[0], g:rgb[1], b:rgb[2], pad:0 };
       }
     }
-    // stary styl: QMap<QString, QString>
+    // old style: QMap<QString, QString>
     const styleMap = { 'dot line': 3, 'dash line': 2, 'dash dot line': 4, 'dash dot dot line': 5 };
     const ns = r.readUInt32();
     for (let i = 0; i < ns; i++) {
@@ -668,7 +668,7 @@ function readMudletRoom(r, version) {
       const sv = readQString(r);
       customLinesStyle[k.toLowerCase()] = styleMap[sv] ?? 1;
     }
-    // Napraw brakujące kolory (Mudlet wstawia Qt::red dla brakujących)
+    // Fix missing colors (Mudlet inserts Qt::red for missing ones)
     for (const k of Object.keys(customLines)) {
       if (!customLinesColor[k]) {
         customLinesColor[k] = { spec:1, alpha:255, r:255, g:0, b:0, pad:0 };
@@ -676,11 +676,11 @@ function readMudletRoom(r, version) {
     }
   }
 
-  // v21+: mSpecialExitLocks jako QSet<QString>
+  // v21+: mSpecialExitLocks as QSet<QString>
   if (version >= 21) {
     const lockSet = readQSetS(r);
     mSpecialExitLocks = [...lockSet];
-    // Zaktualizuj rawSpecialExits o info o zamkach
+    // Update rawSpecialExits with the lock info
     for (const cmd of lockSet) {
       const tid = mSpecialExits[cmd];
       if (tid != null && rawSpecialExits[tid]) {
@@ -717,7 +717,7 @@ function readMudletRoom(r, version) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// writeMudletRoom — zawsze pisze w formacie v20
+// writeMudletRoom — always writes in v20 format
 // ─────────────────────────────────────────────────────────────────────────────
 function writeMudletRoom(w, room) {
   w.writeInt32(room.area        ?? 0);
@@ -732,8 +732,8 @@ function writeMudletRoom(w, room) {
   w.writeInt32(Math.max(1, room.weight ?? 1));
   writeQString(w,   room.name    ?? '');
   w.writeInt8(room.isLocked ? 1 : 0);
-  // v20: specialExits w starym formacie QMultiMap<int,"0cmd"/"1cmd">
-  // Jeśli dane przyszły z v21+ mamy mSpecialExits+mSpecialExitLocks — rekonstruuj rawSpecialExits
+  // v20: specialExits in the old QMultiMap<int,"0cmd"/"1cmd"> format
+  // If data came from v21+ we have mSpecialExits+mSpecialExitLocks — reconstruct rawSpecialExits
   let raw = room.rawSpecialExits ?? {};
   if (!raw || Object.keys(raw).length === 0) {
     if (room.mSpecialExits && Object.keys(room.mSpecialExits).length > 0) {
@@ -747,7 +747,7 @@ function writeMudletRoom(w, room) {
   }
   writeQMMUS(w, raw);
   writeQString(w,   room.symbol  ?? '');
-  // v20: symbolColor idzie do userData jako system.fallback_symbol_color
+  // v20: symbolColor goes to userData as system.fallback_symbol_color
   const ud = { ...(room.userData ?? {}) };
   if (room.symbolColor && room.symbolColor.spec > 0 && !ud['system.fallback_symbol_color']) {
     const c = room.symbolColor;
@@ -772,7 +772,7 @@ function readMudletLabel(r, version) {
   const id        = r.readInt32();
   const pos       = readQVector(r);
   if (version < 21) {
-    // v11-v20: dwa nieużywane QPointF (każdy 2×double) — skip bytes
+    // v11-v20: two unused QPointF (2xdouble each) — skip bytes
     r.readDouble(); r.readDouble();
   }
   const sizeW     = r.readDouble();
@@ -790,7 +790,7 @@ function writeMudletLabel(w, lbl) {
   const DEF_COLOR = { spec: 1, alpha: 255, r: 0, g: 0, b: 0, pad: 0 };
   w.writeInt32(lbl.id ?? 0);
   writeQVector(w, lbl.pos     ?? [0, 0, 0]);
-  // v20: jeden nieużywany QPointF (2×double) — dummy
+  // v20: one unused QPointF (2xdouble) — dummy
   w.writeDouble(0.0); w.writeDouble(0.0);
   w.writeDouble(lbl.size?.[0] ?? 0.0);
   w.writeDouble(lbl.size?.[1] ?? 0.0);
@@ -803,7 +803,7 @@ function writeMudletLabel(w, lbl) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QSet<QString> — używany w v21+ dla mSpecialExitLocks
+// QSet<QString> — used in v21+ for mSpecialExitLocks
 // ─────────────────────────────────────────────────────────────────────────────
 function readQSetS(r) {
   const n = r.readUInt32();
@@ -813,13 +813,13 @@ function readQSetS(r) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// API publiczne
+// Public API
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Wczytuje plik Mudlet map.dat z ArrayBuffer.
- * Obsługuje wersje 17–22. Pliki nowsze niż MUDLET_DAT_MAX_SUPPORTED_VERSION
- * zwracają błąd z polem .unsupportedVersion = true.
+ * Reads a Mudlet map.dat file from an ArrayBuffer.
+ * Supports versions 17-22. Files newer than MUDLET_DAT_MAX_SUPPORTED_VERSION
+ * return an error with .unsupportedVersion = true.
  * @param {ArrayBuffer} arrayBuffer
  * @returns {object} raw map object
  */
@@ -828,7 +828,7 @@ function readMudletDat(arrayBuffer) {
 
   const version = r.readInt32();
 
-  // Sprawdź wersję — odrzuć zbyt nowe pliki których nie umiemy czytać
+  // Check version — reject files too new for us to read
   if (version > MUDLET_DAT_MAX_SUPPORTED_VERSION) {
     return {
       error: true,
@@ -857,14 +857,14 @@ function readMudletDat(arrayBuffer) {
   const useOnlyMapFont       = !!r.readInt8();
 
   // MudletAreas
-  const importWarnings = [];  // audyt ext F2.9/F2.10: warningi importu (duplikaty, zgubione rekordy)
+  const importWarnings = [];  // audit ext F2.9/F2.10: import warnings (duplicates, lost records)
   const areas = {};
   const areaCount = _datCounter(r.readInt32());  // audyt ext F2.8
   for (let i = 0; i < areaCount; i++) {
     const areaId = r.readInt32();
-    // audyt ext F2.9: duplikat id obszaru → warning (last-wins bez zmian), NIE throw
-    // Arc 37: `!== undefined` zamiast hasOwnProperty — klucze to int32 z readInt32(),
-    // prototype-chain nie wchodzi w grę (zachowanie identyczne, taniej w hot loop).
+    // audit ext F2.9: duplicate area id -> warning (last-wins, unchanged), NOT a throw
+    // Arc 37: `!== undefined` instead of hasOwnProperty — keys are int32 from readInt32(),
+    // the prototype chain plays no role (identical behavior, cheaper in the hot loop).
     if (areas[areaId] !== undefined)
       importWarnings.push(`duplicate area id #${areaId} — kept the last record`);
     areas[areaId] = readMudletArea(r, version);
@@ -873,9 +873,9 @@ function readMudletDat(arrayBuffer) {
   // mRoomIdHash
   const mRoomIdHash = readQMapSI(r);
 
-  // Labele:
-  // v11-v20: globalnie po mRoomIdHash — (lblAreaCount, labelCount, areaId, labels[])
-  // v21+:    wbudowane w każdy obszar (już odczytane w readMudletArea)
+  // Labels:
+  // v11-v20: global after mRoomIdHash — (lblAreaCount, labelCount, areaId, labels[])
+  // v21+:    embedded in each area (already read in readMudletArea)
   const labels = {};
   if (version < 21) {
     const lblAreaCount = _datCounter(r.readInt32());  // audyt ext F2.8
@@ -888,7 +888,7 @@ function readMudletDat(arrayBuffer) {
       }
     }
   } else {
-    // Przenieś labele z obszarów do globalnej mapy (dla kompatybilności wewnętrznej)
+    // Move labels from areas into the global map (for internal compatibility)
     for (const [areaId, area] of Object.entries(areas)) {
       if (area.areaLabels && area.areaLabels.length > 0) {
         labels[areaId] = area.areaLabels;
@@ -896,12 +896,12 @@ function readMudletDat(arrayBuffer) {
     }
   }
 
-  // MudletRooms — do końca bufora
+  // MudletRooms — until the end of the buffer
   const rooms = {};
   while (r.remaining() > 0) {
     const roomId = r.readInt32();
-    // audyt ext F2.9: duplikat id pokoju → warning (last-wins bez zmian), NIE throw
-    // Arc 37: `!== undefined` jak wyżej — klucze int32, prototype-chain nie wchodzi w grę.
+    // audit ext F2.9: duplicate room id -> warning (last-wins, unchanged), NOT a throw
+    // Arc 37: `!== undefined` as above — int32 keys, the prototype chain plays no role.
     if (rooms[roomId] !== undefined)
       importWarnings.push(`duplicate room id #${roomId} — kept the last record`);
     rooms[roomId] = readMudletRoom(r, version);
@@ -915,15 +915,15 @@ function readMudletDat(arrayBuffer) {
 }
 
 /**
- * Zapisuje raw map object do binarnego formatu Mudlet map.dat v20.
- * Zawsze zapisuje w wersji MUDLET_DAT_WRITE_VERSION (20) — aktualny standard produkcyjny.
+ * Writes a raw map object to the Mudlet map.dat v20 binary format.
+ * Always writes in MUDLET_DAT_WRITE_VERSION (20) — the current production standard.
  * @param {object} dat
  * @returns {Uint8Array}
  */
 function writeMudletDat(dat) {
   const w = new WriteBuffer();
 
-  // Zawsze zapisuj w wersji produkcyjnej v20
+  // Always write in production version v20
   w.writeInt32(MUDLET_DAT_WRITE_VERSION);
   writeQMapII(w,  dat.envColors            ?? {});
   writeQMapIS(w,  dat.areaNames            ?? {});
@@ -934,7 +934,7 @@ function writeMudletDat(dat) {
   w.writeDouble(dat.mapFontFudgeFactor     ?? 1.0);
   w.writeInt8(dat.useOnlyMapFont ? 1 : 0);
 
-  // MudletAreas — posortowane rosnąco po areaId
+  // MudletAreas — sorted ascending by areaId
   const areaEntries = Object.entries(dat.areas ?? {}).sort(cmpInt);
   w.writeInt32(areaEntries.length);
   for (const [areaId, area] of areaEntries) {
@@ -945,15 +945,15 @@ function writeMudletDat(dat) {
   // mRoomIdHash
   writeQMapSI(w, dat.mRoomIdHash ?? {});
 
-  // Labele — w v20 globalnie po mRoomIdHash
-  // Zbierz z dat.labels ORAZ z obszarów (jeśli dane z v21+ mają areaLabels)
+  // Labels — in v20 global after mRoomIdHash
+  // Collect from dat.labels AND from areas (if v21+ data has areaLabels)
   const allLabels = { ...(dat.labels ?? {}) };
   for (const [areaId, area] of Object.entries(dat.areas ?? {})) {
     if (area.areaLabels && area.areaLabels.length > 0 && !allLabels[areaId]) {
       allLabels[areaId] = area.areaLabels;
     }
   }
-  // Filtruj tylko obszary z co najmniej 1 labelem
+  // Keep only areas with at least 1 label
   const lblEntries = Object.entries(allLabels).filter(([, arr]) => arr && arr.length > 0);
   w.writeInt32(lblEntries.length);
   for (const [areaId, lblArr] of lblEntries) {
@@ -963,7 +963,7 @@ function writeMudletDat(dat) {
     for (const lbl of arr) writeMudletLabel(w, lbl);
   }
 
-  // MudletRooms — w odwróconej kolejności (identycznie z oryginałem Mudleta)
+  // MudletRooms — in reverse order (identical to the original Mudlet)
   const roomEntries = Object.entries(dat.rooms ?? {}).reverse();
   for (const [roomId, room] of roomEntries) {
     w.writeInt32(parseInt(roomId));
@@ -974,7 +974,7 @@ function writeMudletDat(dat) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Narzędzia pomocnicze dla konwersji base64 (piksmapy etykiet)
+// Helper utilities for base64 conversion (label pixmaps)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function uint8ToBase64(bytes) {

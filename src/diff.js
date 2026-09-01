@@ -36,8 +36,8 @@ function _diffEq(a, b) { return stableStringify(a) === stableStringify(b); }
 function _diffPick(c, fields) { const o = {}; for (const f of fields) if (c[f] !== undefined) o[f] = c[f]; return o; }
 function _diffExcept(c, fields) { const o = Object.assign({}, c); for (const f of fields) delete o[f]; return o; }
 
-// Kanon pokoju do porownan — ta sama konwencja co _computeBaseInfo (strip defaultow
-// + posortowane pola tablicowe): ta sama mapa z .dat i .arkmap daje PUSTA kalke.
+// Room canon for comparisons — same convention as _computeBaseInfo (default stripping
+// + sorted array fields): the same map from .dat and .arkmap yields an EMPTY delta.
 function _diffCanonRoom(room) {
   const c = JSON.parse(JSON.stringify(room));
   delete c.area;
@@ -50,8 +50,8 @@ function _diffCanonRoom(room) {
   return c;
 }
 
-// Trym kaskadowy: dokladnie zakres doFn deleteRoom — wyjscia i special exits
-// wskazujace skasowane pokoje znikaja wraz z polami pobocznymi na tych kierunkach.
+// Cascade trim: exactly the scope of doFn deleteRoom — exits and special exits
+// pointing at deleted rooms vanish together with the side fields on those directions.
 function _diffTrimRoomToDeleted(room, deletedRooms) {
   for (const dir of Object.keys(room.exits || {})) {
     if (deletedRooms.has(room.exits[dir])) {
@@ -75,15 +75,15 @@ function _diffTrimRoomToDeleted(room, deletedRooms) {
   ['exit_locks','special_exit_locks'].forEach(k => { if (Array.isArray(room[k]) && !room[k].length) delete room[k]; });
 }
 
-// before-snapshot dla opow full-state (EDIT_ROOM/EDIT_EXIT): stan pokoju
-// po kaskadzie delete'ow i po ruchu — zgodny z cieniem classifyDelta w chwili opu.
-// Pozycje bierzemy z SUROWEGO pokoju docelowego (nie z kanonu — kanon normalizuje
-// z=0, a _deltaRoomCmp w classify porownuje snapshoty pelne, z zachowane).
+// before-snapshot for full-state ops (EDIT_ROOM/EDIT_EXIT): the room state
+// after the delete cascade and after the move — matching classifyDelta's shadow at op time.
+// Positions are taken from the RAW destination room (not the canon — the canon normalizes
+// z=0, and _deltaRoomCmp in classify compares full snapshots, z preserved).
 function _diffBeforeSnapshot(srcRoom, deletedRooms, posRoom) {
-  // posRoom = skad pozycja x/y/z: pokoj DOCZELOWY, gdy kalka najpierw rusza pokoj
-  // (MOVE_ROOM przed roomOps — cien klasyfikatora jest juz na nowej pozycji);
-  // pokoj ZRODLOWY, gdy ten sam op SAM jest ruchem (fallback cyklu) albo gdy
-  // ruchu w ogole nie ma (EDIT_ROOM resid — taki pokoj nigdy nie dostaje MOVE_ROOM).
+  // posRoom = where x/y/z come from: the DESTINATION room when the delta moves the room first
+  // (MOVE_ROOM before roomOps — the classifier shadow is already at the new position);
+  // the SOURCE room when the same op IS the move itself (cycle fallback) or when
+  // there is no move at all (EDIT_ROOM resid — such a room never gets a MOVE_ROOM).
   const b = JSON.parse(JSON.stringify(srcRoom));
   _diffTrimRoomToDeleted(b, deletedRooms);
   b.x = posRoom.x; b.y = posRoom.y;
@@ -124,7 +124,7 @@ function diffMaps(srcMap, dstMap, opts) {
 
   const out = { addArea:[], editArea:[], envColor:[], addRoom:[], moveArea:[], delRoom:[],
     roomOps:[], labelAdd:[], labelEdit:[], labelDel:[], delArea:[] };
-  const paintGroups = new Map();  // klucz zmiany -> changes[]
+  const paintGroups = new Map();  // change key -> changes[]
   const moveCands = [];           // { id, name, area, from{x,y,z}, to{x,y,z}, sRoom, dRoom }
 
   // ── obszary ──
@@ -165,7 +165,7 @@ function diffMaps(srcMap, dstMap, opts) {
     stats.envColor++;
   }
 
-  // ── pokoje ──
+  // ── rooms ──
   const deletedRooms = new Set(), addedRooms = new Set();
   const allRoomIds = [...new Set([...srcRooms.keys(), ...dstRooms.keys()])].sort((a, b) => a - b);
   for (const id of allRoomIds) {
@@ -226,7 +226,7 @@ function diffMaps(srcMap, dstMap, opts) {
 
     const delExitDirs = new Set();
     if (exitsDiffer && !exitRestDiffer) {
-      // granularne DELETE/ADD per kierunek (bez snapshotow — najczytelniejsza historia)
+      // granular DELETE/ADD per direction (no snapshots — the most readable history)
       const dirs = [...new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})])].sort(_diffDirCmp);
       for (const dir of dirs) {
         const sT = (cs.exits || {})[dir], dT = (cd.exits || {})[dir];
@@ -257,7 +257,7 @@ function diffMaps(srcMap, dstMap, opts) {
         }
       }
     } else if (exitsDiffer || exitRestDiffer) {
-      // zmiany mieszane rodziny wyjsc → jeden EDIT_EXIT (full snapshoty; pokrywa tez paint/CL)
+      // mixed exit-family changes -> one EDIT_EXIT (full snapshots; also covers paint/CL)
       const dirs = new Set();
       for (const k of new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})]))
         if ((cs.exits || {})[k] !== (cd.exits || {})[k]) dirs.add(k);
@@ -286,7 +286,7 @@ function diffMaps(srcMap, dstMap, opts) {
           afterEnv: cd.env ?? null, afterSymbol: cd.symbol ?? '' });
       }
       if (clDiffer) {
-        // kierunki z DELETE_EXIT: CL na nich znika razem z wyjsciem — traktujemy zrodlo jako puste
+        // directions with DELETE_EXIT: their CL vanishes with the exit — treat the source as empty
         const dirs = [...new Set([...Object.keys(clS), ...Object.keys(clD)])].sort(_diffDirCmp);
         for (const dir of dirs) {
           const sC = delExitDirs.has(dir) ? undefined : clS[dir];
@@ -310,8 +310,8 @@ function diffMaps(srcMap, dstMap, opts) {
     }
   }
 
-  // ── ruchy: emisja w kolejnosci odblokowujacej; cykl (np. swap) → fallback EDIT_ROOM ──
-  const occ = new Map();  // "areaId:x,y,z" -> roomId (stan po delete'ach, z dodanymi pokojami)
+  // ── moves: emission in unblocking order; a cycle (e.g. swap) -> EDIT_ROOM fallback ──
+  const occ = new Map();  // "areaId:x,y,z" -> roomId (state after deletes, with added rooms)
   const occKey = (areaId, x, y, z) => areaId + ':' + x + ',' + y + ',' + (z ?? 0);
   for (const [id, s] of srcRooms) {
     if (deletedRooms.has(id)) continue;
@@ -370,7 +370,7 @@ function diffMaps(srcMap, dstMap, opts) {
     stats.paintBatches++; stats.paintRooms += n;
   }
 
-  // ── etykiety (pomijamy obszary skasowane — etykiety znikaja kaskadowo) ──
+  // ── labels (skipping deleted areas — labels vanish in the cascade) ──
   for (const aid of allAreaIds) {
     if (deletedAreas.has(aid)) continue;
     const sA = srcAreas.get(aid), dA = dstAreas.get(aid);

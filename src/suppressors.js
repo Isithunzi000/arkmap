@@ -8,44 +8,44 @@ function _findMissingSuppressors(roomById, roomArea) {
   const missing = [];
   for (const A of Object.values(roomById)) {
     for (const [dir, cl] of Object.entries(A.custom_lines || {})) {
-      if (!Array.isArray(cl.points)) continue;   // null-safety — pomiń zepsute wpisy (nie-tablica)
-      if (cl.points.length === 0) continue;      // A jest suppresorem — skip
-      if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit → trójkąt, nie linia; suppressor nigdy niepotrzebny
-      const targetId = A.exits?.[dir];            // tylko exits[], nie special_exits
+      if (!Array.isArray(cl.points)) continue;   // null-safety — skip broken entries (non-array)
+      if (cl.points.length === 0) continue;      // A is a suppressor — skip
+      if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit -> triangle, not a line; suppressor never needed
+      const targetId = A.exits?.[dir];            // exits[] only, not special_exits
       if (targetId === undefined) continue;        // orphan CL — skip
-      // audyt T4/Q5: martwy guard `targetId === -1` usuniety — model nie trzyma -1 (stuby sa w room.stubs)
+      // audit T4/Q5: dead guard `targetId === -1` removed — the model does not hold -1 (stubs live in room.stubs)
       const B = roomById[targetId];
-      if (!B) continue;                            // target nie istnieje — skip
+      if (!B) continue;                            // target does not exist — skip
       if (roomArea[A.id] !== roomArea[B.id]) continue; // cross-area — skip
-      if (A.z !== B.z) continue;                   // cross-Z → drugi pokój nierenderowany na tym poziomie, brak podwójnej linii
+      if (A.z !== B.z) continue;                   // cross-Z -> the other room is not rendered on this level, no double line
       const opp = OPPOSITE[dir];
-      if (!opp) continue;                          // nieznany kierunek — skip
-      // Suppressor potrzebny TYLKO gdy B ma wyjście powrotne do A w kierunku opp
-      // (bo tylko wtedy Mudlet rysuje domyślną linię z B, którą trzeba stłumić)
-      if (B.exits?.[opp] !== A.id) continue;       // B nie ma reciprocal exit — skip
-      // Arc 37 (PRACA 13): dawny skip multi-edge (otherDefaultEdge) usuniety — opieral
-      // sie na dedupie PAR pokoi z renderera Delwinga (exitsRendered). Nasz renderer
-      // (drawExits) rysuje linie domyslne per (pokoj, kierunek) i kazdy kierunek tlumi
-      // wlasna custom_line — przy multi-edge A↔B linia B→A (opp) i tak powstaje,
-      // wiec suppressor jest nadal POTRZEBNY. Skip cross-area powyzej ZOSTAJE:
-      // swiadoma decyzja — wyjscia cross-area renderuja sie jako strzalki/etykiety,
-      // nie jako domyslne linie, wiec podwojnej linii tam nie ma.
+      if (!opp) continue;                          // unknown direction — skip
+      // A suppressor is needed ONLY when B has a return exit to A in direction opp
+      // (because only then does Mudlet draw a default line from B that must be suppressed)
+      if (B.exits?.[opp] !== A.id) continue;       // B has no reciprocal exit — skip
+      // Arc 37 (PRACA 13): the old multi-edge skip (otherDefaultEdge) was removed — it relied
+      // on PAIR dedup from Delwing's renderer (exitsRendered). Our renderer
+      // (drawExits) draws default lines per (room, direction) and each direction suppresses
+      // its own custom_line — with multi-edge A<->B the B->A (opp) line is drawn anyway,
+      // so the suppressor is still NEEDED. The cross-area skip above STAYS:
+      // a deliberate decision — cross-area exits render as arrows/labels,
+      // not as default lines, so there is no double line there.
       const bcl = B.custom_lines?.[opp];
-      if (!bcl) {                                  // brak jakiejkolwiek CL w kierunku opp → suppressor potrzebny
+      if (!bcl) {                                  // no CL at all in direction opp -> suppressor needed
         missing.push({ roomA: A.id, dir, roomB: B.id, oppDir: opp, sourceCL: cl });
       }
     }
   }
   return missing;
 }
-// checkSuppressors() — stan aplikacji (edycja / bramka zapisu / przycisk walidacji).
+// checkSuppressors() — application state (editing / save gate / validation button).
 function checkSuppressors() {
   return _findMissingSuppressors(state.roomById, state.roomArea);
 }
-// checkSuppressorsInMap — wariant dla sparsowanej mapy PRZED applyMap (val-modal
-// przy loadzie, Arc 29). Read-only: buduje lekkie indeksy ad hoc i NIGDY nie mutuje
-// mapy (obiekt idzie potem do applyMap). NIGDY nie rzuca — malformed pokoje pomija,
-// load nie moze sie wywrocic przez ten check.
+// checkSuppressorsInMap — variant for a parsed map BEFORE applyMap (val-modal
+// on load, Arc 29). Read-only: builds light ad-hoc indexes and NEVER mutates
+// the map (the object goes to applyMap afterwards). NEVER throws — skips malformed
+// rooms; the load must not be toppled by this check.
 function checkSuppressorsInMap(map) {
   try {
     const roomById = {}, roomArea = {};

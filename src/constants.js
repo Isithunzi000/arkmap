@@ -4,7 +4,7 @@
 
 // ── constants.js ──
 // Standard exit directions: shorthand -> full name and Mudlet 1-based index
-// Kolejność zgodna z Mudlet TMap.h DIR_ stałymi:
+// Order matching the Mudlet TMap.h DIR_ constants:
 // DIR_NORTH=1, DIR_NORTHEAST=2, DIR_NORTHWEST=3, DIR_EAST=4,
 // DIR_WEST=5,  DIR_SOUTH=6,    DIR_SOUTHEAST=7, DIR_SOUTHWEST=8,
 // DIR_UP=9,    DIR_DOWN=10,    DIR_IN=11,        DIR_OUT=12
@@ -38,12 +38,12 @@ const LINE_INT = { solid: 1, dash: 2, dot: 3, dash_dot: 4, dash_dot_dot: 5 };
 const LINE_STR = Object.fromEntries(Object.entries(LINE_INT).map(([k, v]) => [v, k]));
 
 const FORMAT         = 'arkmap';
-const FORMAT_VERSION = 2;   // koperta v2 (D1): format_version + checksums na top-level; pliki v1 odrzucane
-// P-LOCK-3: komplet kluczy top-level koperty v2 (spec §: areas/checksums/colors/
-// format/format_version/meta). Obce klucze sa zachowywane (D3), ale sygnalizowane przy loadzie.
+const FORMAT_VERSION = 2;   // v2 envelope (D1): format_version + checksums at top level; v1 files rejected
+// P-LOCK-3: complete set of v2-envelope top-level keys (spec: areas/checksums/colors/
+// format/format_version/meta). Foreign keys are preserved (D3) but flagged on load.
 const _ARKMAP_TOP_KEYS = new Set(['format', 'format_version', 'meta', 'colors', 'areas', 'checksums']);
 
-// (CRC-32 usunięte w v1.45.0 — jedyny konsument (sumy .arkdelta) zmigrowany na XXH3-64,
-//  zunifikowany z silnikiem sum .arkmap; stableStringify pozostaje kanonizacją treści kalki)
+// (CRC-32 removed in v1.45.0 — the only consumer (.arkdelta checksums) migrated to XXH3-64,
+//  unified with the .arkmap checksum engine; stableStringify remains the delta-content canonization)
 
 export { DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, DOOR_RGB, LINE_INT, LINE_STR, FORMAT, FORMAT_VERSION, _ARKMAP_TOP_KEYS };

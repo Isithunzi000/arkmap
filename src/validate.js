@@ -37,7 +37,7 @@ function validateLabel(label, path, errors) {
     return;
   }
   if (!Number.isInteger(label.id))        errors.push(err(`${path}.id`,     'must be integer'));
-  // audyt ext F2.11: isFinite zamiast typeof — NaN/Infinity nie przechodza (komunikat bez zmian)
+  // audit ext F2.11: isFinite instead of typeof — NaN/Infinity do not pass (message unchanged)
   if (!Number.isFinite(label.x))          errors.push(err(`${path}.x`,      'must be number'));
   if (!Number.isFinite(label.y))          errors.push(err(`${path}.y`,      'must be number'));
   if (!Number.isInteger(label.z))         errors.push(err(`${path}.z`,      'must be integer'));
@@ -52,7 +52,7 @@ function validateLabel(label, path, errors) {
     errors.push(err(`${path}.show_on_top`, 'must be boolean'));
   if (label.pixmap !== undefined && label.pixmap !== null && typeof label.pixmap !== 'string')
     errors.push(err(`${path}.pixmap`, 'must be string or null'));
-  // audyt T4/S3: poprawnosc base64 i rozmiar — kontrolowany blad przy imporcie zamiast wywalenia w atob przy eksporcie
+  // audit T4/S3: base64 validity and size — a controlled error at import instead of crashing in atob at export
   if (typeof label.pixmap === 'string' && label.pixmap.length) {
     if (label.pixmap.length > 4194304) errors.push(err(`${path}.pixmap`, 'too large (limit 4 MB base64)'));
     else { try { atob(label.pixmap); } catch (e) { errors.push(err(`${path}.pixmap`, 'must be valid base64')); } }
@@ -124,7 +124,7 @@ function validateRoom(room, path, errors, warnings = []) {
         if (!VALID_DIRS.has(d)) errors.push(err(`${path}.stubs`, `"${d}" is not a valid direction`));
         if (seen.has(d)) errors.push(err(`${path}.stubs`, `duplicate direction "${d}"`));
         seen.add(d);
-        // stubs mogą współistnieć z exits (Mudlet to dopuszcza)
+        // stubs may coexist with exits (Mudlet allows this)
       }
     }
   }
@@ -139,7 +139,7 @@ function validateRoom(room, path, errors, warnings = []) {
         if (!VALID_DIRS.has(d)) errors.push(err(`${path}.exit_locks`, `"${d}" is not a valid direction`));
         if (seen.has(d)) errors.push(err(`${path}.exit_locks`, `duplicate direction "${d}"`));
         seen.add(d);
-        // exit_lock może dotyczyć kierunku spoza exits (Mudlet to dopuszcza)
+        // an exit_lock may concern a direction outside exits (Mudlet allows this)
       }
     }
   }
@@ -171,7 +171,7 @@ function validateRoom(room, path, errors, warnings = []) {
 
   // doors: keys must be in exits, stubs, or special_exits; valid string values
   if (_doorsOk) for (const d of Object.keys(doors)) {
-    // drzwi mogą być w kierunkach spoza exits/stubs/special_exits (Mudlet to dopuszcza)
+    // doors may be in directions outside exits/stubs/special_exits (Mudlet allows this)
     if (!['open', 'closed', 'locked'].includes(doors[d]))
       errors.push(err(`${path}.doors.${d}`, 'must be "open", "closed", or "locked"'));
   }
@@ -194,7 +194,7 @@ function validateRoom(room, path, errors, warnings = []) {
     else if (cl.points.length > 0) {
       for (let pi = 0; pi < cl.points.length; pi++) {
         const pt = cl.points[pi];
-        // audyt ext F2.11: isFinite — NaN/Infinity w punkcie CL odrzucone
+        // audit ext F2.11: isFinite — NaN/Infinity in a CL point rejected
         if (!Array.isArray(pt) || pt.length !== 2 || !Number.isFinite(pt[0]) || !Number.isFinite(pt[1]))
           errors.push(err(`${path}.custom_lines.${d}.points[${pi}]`, 'must be [number, number]'));
       }
@@ -250,14 +250,14 @@ function validateArea(area, path, errors, warnings = []) {
     errors.push(err(`${path}.pos`, 'must be an array of 3 integers'));
   if (area.user_data    !== undefined) validateUserData(area.user_data, `${path}.user_data`, errors);
 
-  // audyt T4/S2: obiekt zamiast tablicy przechodzil cicho (petla po undefined.length)
+  // audit T4/S2: an object instead of an array used to pass silently (loop over undefined.length)
   if (area.labels !== undefined && !Array.isArray(area.labels)) errors.push(err(`${path}.labels`, 'must be an array'));
   for (let i = 0; i < (Array.isArray(area.labels) ? area.labels : []).length; i++) {
     validateLabel(area.labels[i], `${path}.labels[${i}]`, errors);
   }
   // Check label ID uniqueness within area
   const labelIds = new Set();
-  for (const lbl of (Array.isArray(area.labels) ? area.labels : [])) {  // audyt T4/S2
+  for (const lbl of (Array.isArray(area.labels) ? area.labels : [])) {  // audit T4/S2
     if (lbl && Number.isInteger(lbl.id)) {
       if (labelIds.has(lbl.id)) errors.push(err(`${path}.labels`, `duplicate label id ${lbl.id}`));
       labelIds.add(lbl.id);

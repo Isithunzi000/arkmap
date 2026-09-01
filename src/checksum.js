@@ -4,15 +4,15 @@
 // Divergence: EN internal invariant message in _CanonBuf (H0.3).
 
 // ── checksum.js ──────────────────────────────────────────────────────────────
-// Hierarchiczne sumy kontrolne XXH3-64 (alg v4) dla integralności pliku .arkmap
-// Struktura: plik → obszary → pokoje
-// Zapis (koperta v2): top-level checksums = { alg:'v4', file, meta, areas:{id→hex16}, rooms:{id→hex16} }
-// Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V4.md
-// Weryfikacja wyłącznie alg 'v4'; brak sum → cicho; inny alg → GŁOŚNE ostrzeżenie (algMismatch).
+// Hierarchical XXH3-64 checksums (alg v4) for .arkmap file integrity
+// Structure: file -> areas -> rooms
+// Envelope (v2): top-level checksums = { alg:'v4', file, meta, areas:{id->hex16}, rooms:{id->hex16} }
+// Canonical encoding per spec: tests/checksums/CANONICAL_V4.md
+// Verification of alg 'v4' only; no checksums -> silent; other alg -> LOUD warning (algMismatch).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// _stripRoomDefaults(room) — usuwa puste kontenery i wartości domyślne z obiektu pokoju.
-// Modyfikuje room in-place. Używane przez _serializeMap (na klonie).
+// _stripRoomDefaults(room) — removes empty containers and default values from a room object.
+// Mutates room in-place. Used by _serializeMap (on a clone).
 // Odpowiada spec §6 omission convention: optional fields omitted when carrying no information.
 function _stripRoomDefaults(room) {
   // Empty containers → omit
@@ -29,7 +29,7 @@ function _stripRoomDefaults(room) {
   // Default values → omit
   if (room.weight === 1)      delete room.weight;
   if (room.locked === false)  delete room.locked;
-  if (room.hidden === false)  delete room.hidden;  // audyt T3/W4: domyślne false nie wchodzi do CRC/eksportu
+  if (room.hidden === false)  delete room.hidden;  // audit T3/W4: default false stays out of CRC/export
   if (room.symbol === '')     delete room.symbol;
   if (room.name === '')       delete room.name;
   if (room.notes === '')      delete room.notes;
@@ -47,9 +47,9 @@ function _stripRoomDefaults(room) {
 
 
 // ====XXH3-64-BEGIN====
-// XXH3-64 (seed 0), czysty JS. Rdzen na parach u32 [hi,lo] (Number/Math.imul) — zero BigInt
-// w goracej sciezce; BigInt tylko na wyjsciu xxh3_64 (kontrakt API zachowany).
-// Bajtowo identyczny z portem referencji xxHash v0.8.3 — piny: tests/checksums/xxh3_golden.js
+// XXH3-64 (seed 0), pure JS. Core on u32 [hi,lo] pairs (Number/Math.imul) — zero BigInt
+// in the hot path; BigInt only at the xxh3_64 output (API contract preserved).
+// Byte-identical to the xxHash v0.8.3 reference port — pins: tests/checksums/xxh3_golden.js
 // (vectors_v4.json, oracle Python) + fuzz rownowaznosci z referencja BigInt:
 // tests/checksums/xxh3_fuzz_equiv.js (referencja: tests/checksums/xxh3.js).
 const XXH3_SECRET = Uint8Array.from([
@@ -82,15 +82,15 @@ function _r32(b, o) {
 }
 const _swap32 = w => ((w >>> 24) | ((w >>> 8) & 0xFF00) | ((w << 8) & 0xFF0000) | (w << 24)) >>> 0;
 
-// Rejestry robocze na poziomie modulu — zero alokacji w goracej petli.
-// Kontrakt: funkcje zwracaja rejestr, wynik wazny do nastepnego wywolania dowolnej z nich.
+// Module-level work registers — zero allocation in the hot loop.
+// Contract: functions return the register; the result is valid until the next call of any of them.
 const _LL = [0, 0], _LH = [0, 0], _HL = [0, 0], _HH = [0, 0];
-const _MF = [0, 0];                                          // wynik _mul128fold / _mix16B
-const _T64A = [0, 0];                                        // wynik _mul64into
-const _ACC = [0, 0], _ACC2 = [0, 0];                         // akumulatory sciezek dlugosci
+const _MF = [0, 0];                                          // result of _mul128fold / _mix16B
+const _T64A = [0, 0];                                        // result of _mul64into
+const _ACC = [0, 0], _ACC2 = [0, 0];                         // length-path accumulators
 const _ACC8 = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]; // _hashLong
 
-// 32x32 -> 64 dokladnie (limby 16-bit, wszystkie posrednie < 2^53)
+// 32x32 -> 64 exact (16-bit limbs, all intermediates < 2^53)
 function _umul32into(t, a, b) {
   const aL = a & 0xFFFF, aH = a >>> 16, bL = b & 0xFFFF, bH = b >>> 16;
   const w0 = aL * bL;
@@ -99,7 +99,7 @@ function _umul32into(t, a, b) {
   t[1] = ((w1 << 16) | (w0 & 0xFFFF)) >>> 0;
   t[0] = (aH * bH + Math.floor(tt / 65536) + Math.floor(w1 / 65536)) >>> 0;
 }
-// 64x64 -> 128 -> fold: (hi64 ^ lo64) iloczynu; wynik w _MF
+// 64x64 -> 128 -> fold: (hi64 ^ lo64) of the product; result in _MF
 function _mul128fold(aH, aL, bH, bL) {
   _umul32into(_LL, aL, bL);
   _umul32into(_LH, aL, bH);
@@ -122,7 +122,7 @@ function _add64into(acc, pH, pL) {
   acc[1] = s >>> 0;
   acc[0] = (acc[0] + pH + (s >= 4294967296 ? 1 : 0)) >>> 0;
 }
-// t = (h,l) * (mH,mL) mod 2^64 (rejestr docelowy, zero alokacji)
+// t = (h,l) * (mH,mL) mod 2^64 (destination register, zero allocation)
 function _mul64into(t, h, l, mH, mL) {
   _umul32into(_LL, l, mL);
   const mid = (Math.imul(h, mL) + Math.imul(l, mH)) >>> 0;
@@ -160,7 +160,7 @@ function _rrmxmxIp(p, len) {
   const t0 = h >>> 28, t1 = ((l >>> 28) | (h << 4)) >>> 0;   // h ^= h >> 28
   p[0] = (h ^ t0) >>> 0; p[1] = (l ^ t1) >>> 0;
 }
-function _mix16B(input, ioff, soff) {                        // wynik w _MF
+function _mix16B(input, ioff, soff) {                        // result in _MF
   const aH = _r32(input, ioff + 4) ^ _r32(XXH3_SECRET, soff + 4);
   const aL = _r32(input, ioff) ^ _r32(XXH3_SECRET, soff);
   const bH = _r32(input, ioff + 12) ^ _r32(XXH3_SECRET, soff + 12);
@@ -168,7 +168,7 @@ function _mix16B(input, ioff, soff) {                        // wynik w _MF
   return _mul128fold(aH, aL, bH, bL);
 }
 
-// bitflipy i pusty skrot liczone z sekretu raz, przy ladowaniu (stale modulu)
+// bitflips and the empty digest computed from the secret once, at load (module constants)
 const _BF1H = (_r32(XXH3_SECRET, 28) ^ _r32(XXH3_SECRET, 36)) >>> 0, _BF1L = (_r32(XXH3_SECRET, 24) ^ _r32(XXH3_SECRET, 32)) >>> 0;
 const _BF2H = (_r32(XXH3_SECRET, 44) ^ _r32(XXH3_SECRET, 52)) >>> 0, _BF2L = (_r32(XXH3_SECRET, 40) ^ _r32(XXH3_SECRET, 48)) >>> 0;
 const _BF3H = (_r32(XXH3_SECRET, 12) ^ _r32(XXH3_SECRET, 20)) >>> 0, _BF3L = (_r32(XXH3_SECRET, 8) ^ _r32(XXH3_SECRET, 16)) >>> 0;
@@ -309,8 +309,8 @@ function _hashLong(input, len) {
   return _ACC;
 }
 
-// _xxh3pair(bytes, len?) -> rejestr [hi, lo] (u32, u32); wynik wazny do nastepnego wywolania.
-// len < bytes.length: hash tylko prefixu (goraca sciezka czyta wprost ze wspolnego bufora, bez subarray).
+// _xxh3pair(bytes, len?) -> register [hi, lo] (u32, u32); result valid until the next call.
+// len < bytes.length: hash the prefix only (hot path reads straight from the shared buffer, no subarray).
 function _xxh3pair(bytes, len) {
   if (len === undefined) len = bytes.length;
   if (len <= 16) return _len0to16(bytes, len);
@@ -318,7 +318,7 @@ function _xxh3pair(bytes, len) {
   if (len <= 240) return _len129to240(bytes, len);
   return _hashLong(bytes, len);
 }
-// tablica 2-znakowych bajtow hex — _pairHex64 bez padStart (pomiar: ~10x szybciej)
+// table of 2-char hex bytes — _pairHex64 without padStart (measured: ~10x faster)
 const _HEXB = new Array(256);
 for (let i = 0; i < 256; i++) _HEXB[i] = (i < 16 ? '0' : '') + i.toString(16);
 function _hex32(w) {
@@ -327,7 +327,7 @@ function _hex32(w) {
 function _pairHex64(p) {
   return _hex32(p[0]) + _hex32(p[1]);
 }
-// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0 — kontrakt bez zmian
+// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0 — contract unchanged
 function xxh3_64(bytes) {
   const p = _xxh3pair(bytes);
   return (BigInt(p[0]) << 32n) | BigInt(p[1]);
@@ -338,7 +338,7 @@ function xxh3_64hex(bytes) {
 // ====XXH3-64-END====
 
 // ====CANONICAL-V4-BEGIN====
-// Kanoniczne kodowanie binarne v4 — spec normatywny: tests/checksums/CANONICAL_V4.md
+// Canonical binary encoding v4 — normative spec: tests/checksums/CANONICAL_V4.md
 const _V4_DIR_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'up', 'down', 'in', 'out'];
 const _V4_DIR_SET = new Set(_V4_DIR_ORDER);
 const _CANON_NAN_BYTES = Uint8Array.from([0, 0, 0, 0, 0, 0, 0xF8, 0x7F]); // quiet-NaN 7ff8000000000000
@@ -349,8 +349,8 @@ const _canonTe = new TextEncoder();
 
 class _CanonBuf {
   constructor() { this.b = new Uint8Array(4096); this.n = 0; this._busy = false; this.dv = new DataView(this.b.buffer); }
-  // Straznik zagniezdzenia: reset w trakcie trwania innego kodowania nadpisalby bufor.
-  // Wejsciowe enkodery (pokoj/obszar/plik) robia reset() + release() w finally.
+  // Nesting guard: a reset while another encoding is in progress would overwrite the buffer.
+  // The entry encoders (room/area/file) do reset() + release() in finally.
   reset() {
     if (this._busy) throw new Error('_CanonBuf: nested use (reset during encoding)');
     this._busy = true; this.n = 0;
@@ -374,7 +374,7 @@ class _CanonBuf {
   }
   i32(v) { this.u32(v | 0); }
   f64(v) {
-    if (typeof v !== 'number' || Number.isNaN(v)) { this._cap(8); this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/nie-liczba → kanoniczny NaN (payload deterministyczny niezależnie od provenancji obiektu)
+    if (typeof v !== 'number' || Number.isNaN(v)) { this._cap(8); this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/non-number -> canonical NaN (payload deterministic regardless of object provenance)
     if (v === 0) v = 0;                                            // -0 → +0
     if (this.n + 8 > this.b.length) this._cap(8);
     this.dv.setFloat64(this.n, v, true); this.n += 8;
@@ -383,7 +383,7 @@ class _CanonBuf {
     if (this.n + 4 + s.length * 3 > this.b.length) this._cap(4 + s.length * 3);
     const b = this.b, o = this.n + 4;
     let i = 0;
-    for (; i < s.length; i++) {                                    // ASCII: bajty === kodowanie UTF-8
+    for (; i < s.length; i++) {                                    // ASCII: bytes === UTF-8 encoding
       const c = s.charCodeAt(i);
       if (c > 0x7F) break;
       b[o + i] = c;
@@ -407,7 +407,7 @@ class _CanonBuf {
 }
 const _canonBuf = new _CanonBuf();
 
-function _utf8cmp(a, b) {                                          // a, b: Uint8Array — porównanie bajtowe
+function _utf8cmp(a, b) {                                          // a, b: Uint8Array — byte comparison
   const n = Math.min(a.length, b.length);
   for (let i = 0; i < n; i++) { if (a[i] !== b[i]) return a[i] - b[i]; }
   return a.length - b.length;
@@ -415,7 +415,7 @@ function _utf8cmp(a, b) {                                          // a, b: Uint
 function _utf8SortArr(arr) {
   return arr.map(k => [k, _canonTe.encode(k)]).sort((p, q) => _utf8cmp(p[1], q[1])).map(p => p[0]);
 }
-// Klucze mapy kierunkowej: znane wg _V4_DIR_ORDER, potem nieznane UTF-8 bajtowo
+// Direction-map keys: known ones per _V4_DIR_ORDER, then unknown ones by raw UTF-8 bytes
 function _canonDirKeys(m) {
   const out = [];
   for (const d of _V4_DIR_ORDER) if (m[d] !== undefined) out.push(d);
@@ -423,7 +423,7 @@ function _canonDirKeys(m) {
   for (const k in m) if (!_V4_DIR_SET.has(k)) (unk || (unk = [])).push(k);
   return unk ? out.concat(_utf8SortArr(unk)) : out;
 }
-// Lista kierunków (array): jak wyżej
+// Direction list (array): as above
 function _canonDirList(arr) {
   const out = _V4_DIR_ORDER.filter(d => arr.includes(d));
   const unk = arr.filter(k => !_V4_DIR_SET.has(k));
@@ -434,11 +434,11 @@ function _encodeLabelCanonical(B, lb) {
   B.i32(lb.id); B.f64(lb.x); B.f64(lb.y); B.i32(lb.z);
   B.f64(lb.width); B.f64(lb.height);
   B.str(lb.text ?? '');
-  // tolerancja na uszkodzone pliki (verifyChecksums biegnie przed dialogiem walidacji):
-  // brakujace fg/bg kodowane jako [0,0,0] — deterministycznie, walidator i tak je odrzuci
+  // tolerance for corrupt files (verifyChecksums runs before the validation dialog):
+  // missing fg/bg are encoded as [0,0,0] — deterministically; the validator rejects them anyway
   const fg = Array.isArray(lb.fg_color) ? lb.fg_color : [0, 0, 0];
   const bg = Array.isArray(lb.bg_color) ? lb.bg_color : [0, 0, 0];
-  // v4: liczba skladowych + wszystkie kanaly (alfa objeta) — konwencja jak w _encodeColorsCanonical
+  // v4: component count + all channels (alpha included) — same convention as _encodeColorsCanonical
   B.u32(fg.length); for (const c of fg) B.i32(c | 0);
   B.u32(bg.length); for (const c of bg) B.i32(c | 0);
   B.u8(lb.show_on_top ? 1 : 0);
@@ -448,7 +448,7 @@ function _encodeLabelCanonical(B, lb) {
   else { B.u8(1); B.str(pm); }
 }
 
-// _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r4'). Bez klonowania.
+// _encodeRoomCanonical(room) — canonical room bytes (prefix 'r4'). No cloning.
 function _encodeRoomCanonical(room) {
   const B = _canonBuf; B.reset();
   try { _encodeRoomBody(B, room); return B.bytes(); } finally { B.release(); }
@@ -522,7 +522,7 @@ function _encodeRoomBody(B, room) {
       const e = cl[k];
       B.str(k);
       const pts = e.points || [];
-      B.u32(pts.length);                                           // [] = supresor — licznik 0
+      B.u32(pts.length);                                           // [] = suppressor — count 0
       for (const pt of pts) { B.f64(pt[0]); B.f64(pt[1]); }
       const color = e.color;
       if (color !== undefined && color !== null) {
@@ -545,11 +545,11 @@ function _encodeRoomBody(B, room) {
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.str(ud[k]); }
   }
-  const rh = room.hash;                                            // v4: hash pokoju z upstream (np. "45:28:0:Wyzima")
+  const rh = room.hash;                                            // v4: room hash from upstream (e.g. "45:28:0:Wyzima")
   if (typeof rh === 'string' && rh) B.str(rh);
 }
 
-// _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
+// _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] in ascending room id order
 function _encodeAreaCanonical(area, roomRawList) {
   const B = _canonBuf; B.reset();
   try { _encodeAreaBody(B, area, roomRawList); return B.bytes(); } finally { B.release(); }
@@ -557,7 +557,7 @@ function _encodeAreaCanonical(area, roomRawList) {
 function _encodeAreaBody(B, area, roomRawList) {
   B.u8(0x61); B.u8(0x34);                                          // 'a4'
   B.i32(area.id); B.str(area.name ?? '');
-  // v4: pola obszaru wczesniej poza suma (presence-guard zgodny z konwencja pomijania w pliku)
+  // v4: area fields earlier outside the checksum (presence-guard matching the file omission convention)
   if (area.grid_mode !== undefined) B.u8(area.grid_mode ? 1 : 0);
   if (area.is_zone !== undefined) B.u8(area.is_zone ? 1 : 0);
   if (area.zone_area_ref !== undefined) B.i32(area.zone_area_ref);
@@ -593,8 +593,8 @@ function _encodeColorsCanonical(B, colors) {
   }
 }
 
-// _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: pary [id, BigInt] posortowane po id rosnąco.
-// v4: bez globalnego rollupu pokoi — byl redundantny wzgledem rollupow obszarow (pokoj -> obszar -> plik).
+// _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: [id, BigInt] pairs sorted by ascending id.
+// v4: no global room rollup — it was redundant with the area rollups (room -> area -> file).
 function _encodeFileBody(B, colors, areaRaw) {
   B.u8(0x66); B.u8(0x34);                                        // 'f4'
   _encodeColorsCanonical(B, colors);
@@ -608,7 +608,7 @@ function _encodeFileCanonical(colors, areaRaw) {
 
 function _hex64(h) { return h.toString(16).padStart(16, '0'); }
 
-// _hashRoomCanon(room) — encode do wspolnego bufora + hash bez subarray; zwraca rejestr _xxh3pair.
+// _hashRoomCanon(room) — encode into the shared buffer + hash without subarray; returns the _xxh3pair register.
 function _hashRoomCanon(room) {
   const B = _canonBuf; B.reset();
   try { _encodeRoomBody(B, room); return _xxh3pair(B.b, B.n); } finally { B.release(); }
@@ -618,12 +618,12 @@ function _hashFileCanon(colors, areaRaw) {
   try { _encodeFileBody(B, colors, areaRaw); return _xxh3pair(B.b, B.n); } finally { B.release(); }
 }
 
-// ── Kodowanie obiektu meta (prefix 'm4') — checksums.meta, koperta v2 (D2) ──
-// Generyczne kodowanie wartosci JSON: tagi typow, klucze obiektow w porzadku
-// bajtowym UTF-8, rekurencja. Klucze z wartoscia undefined pomijane (jak w
-// serializacji); undefined/null w tablicach kodowane jako null. Spec: CANONICAL_V4.md
-// (sekcja „Meta object encoding"); wektory: tests/checksums/vectors_v4_meta.json.
-const _V4_META_MAX_DEPTH = 60;   // jak _DELTA_MAX_DEPTH — glebokie meta → wyjatek → verifyError (nigdy RangeError)
+// ── Meta object encoding (prefix 'm4') — checksums.meta, v2 envelope (D2) ──
+// Generic JSON value encoding: type tags, object keys in UTF-8 byte order,
+// recursive. Keys with undefined values are omitted (as in serialization);
+// undefined/null in arrays are encoded as null. Spec: CANONICAL_V4.md
+// ("Meta object encoding" section); vectors: tests/checksums/vectors_v4_meta.json.
+const _V4_META_MAX_DEPTH = 60;   // like _DELTA_MAX_DEPTH — deep meta -> exception -> verifyError (never RangeError)
 function _encodeMetaValue(B, v, depth) {
   if (depth > _V4_META_MAX_DEPTH) throw new Error('meta-canon-depth');
   if (v === null || v === undefined) { B.u8(0); return; }
@@ -646,9 +646,9 @@ function _encodeMetaValue(B, v, depth) {
     for (const k of ks) { B.str(k); _encodeMetaValue(B, v[k], depth + 1); }
     return;
   }
-  B.u8(0);   // typy spoza JSON (function/symbol) — nie wystepuja po JSON.parse; deterministycznie jako null
+  B.u8(0);   // non-JSON types (function/symbol) — cannot occur after JSON.parse; deterministically encoded as null
 }
-// _encodeMetaBody(B, meta) — 'm4' + cialo obiektu top-level (meta jest zawsze obiektem)
+// _encodeMetaBody(B, meta) — 'm4' + the top-level object body (meta is always an object)
 function _encodeMetaBody(B, meta) {
   B.u8(0x6D); B.u8(0x34);                                        // 'm4'
   const m = (meta && typeof meta === 'object' && !Array.isArray(meta)) ? meta : {};
@@ -661,11 +661,11 @@ function _hashMetaCanon(meta) {
   try { _encodeMetaBody(B, meta); return _xxh3pair(B.b, B.n); } finally { B.release(); }
 }
 
-// _computeV4Checksums(arkmap) — jeden wspólny przebieg liczenia sum alg v4.
-// Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt top-level checksums
-// (koperta v2: alg/file/meta/areas/rooms; meta = integrity meta, file = identity bez meta).
-// Może rzucić na uszkodzonych danych — wyjątek łapie WYŁĄCZNIE verifyChecksums (ścieżka wczytania);
-// ścieżki zapisu (addChecksums, baseInfo, delta) celowo fail-loud: wyjątek tam = bug aplikacji.
+// _computeV4Checksums(arkmap) — one shared pass computing alg v4 checksums.
+// Read-only (no cloning, no map mutation). Returns exactly the top-level checksums shape
+// (v2 envelope: alg/file/meta/areas/rooms; meta = integrity meta, file = identity without meta).
+// May throw on corrupt data — the exception is caught ONLY by verifyChecksums (load path);
+// write paths (addChecksums, baseInfo, delta) are deliberately fail-loud: an exception there = app bug.
 function _computeV4Checksums(arkmap) {
   const rooms = {}, areas = {};
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
@@ -677,7 +677,7 @@ function _computeV4Checksums(arkmap) {
     for (const room of sortedRooms) {
       const raw = _hashRoomCanon(room);
       rooms[String(room.id)] = _pairHex64(raw);
-      roomRawList.push([raw[0], raw[1]]);                            // kopia — rejestr wspoldzielony
+      roomRawList.push([raw[0], raw[1]]);                            // copy — the register is shared
     }
     const B = _canonBuf; B.reset();
     let aRaw;
@@ -694,9 +694,9 @@ function _computeV4Checksums(arkmap) {
   };
 }
 
-// addChecksums(arkmap) — stempluje meta.app_version (objete checksums.meta) i wstawia
-// sumy v4 na TOP-LEVEL arkmap.checksums (koperta v2). In-place, zwraca arkmap.
-// APP_VERSION moze nie istniec w kontekscie harnessow node (ekstrakcja blokow) — wtedy bez stempla.
+// addChecksums(arkmap) — stamps meta.app_version (covered by checksums.meta) and inserts
+// v4 checksums at TOP-LEVEL arkmap.checksums (v2 envelope). In-place, returns arkmap.
+// APP_VERSION may not exist in node harness contexts (block extraction) — then no stamp.
 function addChecksums(arkmap) {
   if (!arkmap.meta) arkmap.meta = {};
   if (typeof APP_VERSION !== 'undefined') arkmap.meta.app_version = APP_VERSION;
@@ -704,16 +704,16 @@ function addChecksums(arkmap) {
   return arkmap;
 }
 
-// verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v4. NIGDY nie rzuca (biegnie przed
-// dialogiem walidacji): uszkodzone dane → verifyError, a głos ma walidacja.
-// Czyta sumy z TOP-LEVEL arkmap.checksums (koperta v2); meta.checksums (uklad v1) jest ignorowane
-// — pliki v1 odrzuca wczesniej walidacja (format_version !== 2 = fatal).
-// Zwraca: { present, ok, fileOk, metaOk?, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
-//           missingRooms:[id], missingAreas:[{id,name}], extraRooms:[klucz], extraAreas:[klucz],
-//           computed? (pełny zestaw do reużycia), algMismatch?, verifyError? }
-// metaOk — osobny, INFORMACYJNY sygnal integrity meta (D2); nie wchodzi do ok.
-// Brak sekcji sum → present:false (cicho; świeże/zaimportowane pliki).
-// Alg inny niż v4 → present:true, ok:false, algMismatch — GŁOŚNO: cichy skip byłby dziurą downgrade'ową.
+// verifyChecksums(arkmap) — hierarchical alg v4 verification. NEVER throws (runs before
+// the validation dialog): corrupt data -> verifyError, and validation has the say.
+// Reads checksums from TOP-LEVEL arkmap.checksums (v2 envelope); meta.checksums (v1 layout) is ignored
+// — v1 files are rejected earlier by validation (format_version !== 2 = fatal).
+// Returns: { present, ok, fileOk, metaOk?, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
+//            missingRooms:[id], missingAreas:[{id,name}], extraRooms:[key], extraAreas:[key],
+//            computed? (full set for reuse), algMismatch?, verifyError? }
+// metaOk — a separate, INFORMATIONAL integrity-meta signal (D2); does not feed into ok.
+// No checksum section -> present:false (silent; fresh/imported files).
+// Alg other than v4 -> present:true, ok:false, algMismatch — LOUD: a silent skip would be a downgrade hole.
 function verifyChecksums(arkmap) {
   const empty = { badAreas: [], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] };
   const stored = arkmap.checksums;
@@ -742,7 +742,7 @@ function verifyChecksums(arkmap) {
       else if (storedR !== computed.rooms[sid]) badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
     }
   }
-  // sieroty: wpisy w zapisanych słownikach bez obiektu w pliku (deterministyczny porządek bajtowy kluczy)
+  // orphans: entries in the stored dictionaries with no object in the file (deterministic byte key order)
   const _keyOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const extraRooms = Object.keys(storedRooms).filter(id => !(id in computed.rooms)).sort(_keyOrder);
   const extraAreas = Object.keys(storedAreas).filter(id => !(id in computed.areas)).sort(_keyOrder);
@@ -750,7 +750,7 @@ function verifyChecksums(arkmap) {
   const fileOk = stored.file === computed.file;
   const ok = fileOk && !badAreas.length && !badRooms.length && !missingRooms.length
              && !missingAreas.length && !extraRooms.length && !extraAreas.length;
-  // D2: integrity meta — informacyjnie, poza ok; undefined gdy plik nie niesie checksums.meta
+  // D2: integrity meta — informational, outside ok; undefined when the file carries no checksums.meta
   const metaOk = (typeof stored.meta === 'string') ? stored.meta === computed.meta : undefined;
   return { present: true, ok, fileOk, metaOk, badAreas, badRooms, missingRooms, missingAreas, extraRooms, extraAreas, computed };
 }

@@ -6,14 +6,14 @@
 /**
  * arkadia-env.js
  *
- * Słownik środowisk (envId → kolor + nazwa) i symboli pokoi dla świata Arkadia.
- * Wyprowadzony z projektu arkadia-crowdmap (Delwing/Dargoth) — de facto standard
- * używany przez kartografów Arkadii od lat.
+ * Dictionary of environments (envId -> color + name) and room symbols for the
+ * Arkadia world. Derived from the arkadia-crowdmap project (Delwing/Dargoth) —
+ * the de facto standard used by Arkadia cartographers for years.
  *
- * Źródło: draw_tools/gui/mapper tools.lua z arkadia-crowdmap-master
+ * Source: draw_tools/gui/mapper tools.lua from arkadia-crowdmap-master
  */
 
-// ─── ŚRODOWISKA ───────────────────────────────────────────────────────────────
+// ─── ENVIRONMENTS ─────────────────────────────────────────────────────────────
 // Mapa envId → { name, rgb: [r,g,b] }
 // envId pochodzi z Mudlet (getCustomEnvColorTable / setRoomEnv)
 
@@ -27,7 +27,7 @@ const ARKADIA_ENVS = {
   259: { name: 'env 259',            rgb: [128, 128, 0]   },
   260: { name: 'env 260',            rgb: [0,   0,   128] },
   261: { name: 'Bez światła',         rgb: [128, 0,   128] },
-  262: { name: 'Wieś / Lok. łączona 2', rgb: [0,   128, 128] }, // env 262 używany dla Wieś i Lok. łączona 2
+  262: { name: 'Wieś / Lok. łączona 2', rgb: [0,   128, 128] }, // env 262 used for both Wies and Lok. laczona 2
   263: { name: 'env 263',             rgb: [192, 192, 192] },
   264: { name: 'env 264',             rgb: [36,  36,  36]  },
   265: { name: 'env 265',             rgb: [255, 0,   0]   },
@@ -71,9 +71,9 @@ const ARKADIA_ENVS = {
   855: { name: 'env 855',             rgb: [160, 82,  45]  },
 };
 
-// ─── SYMBOLE POKOJÓW ─────────────────────────────────────────────────────────
+// ─── ROOM SYMBOLS ────────────────────────────────────────────────────────────
 // Mapa symbol → opis (de facto standard arkadyjski, z crowdmap)
-// roomChar / symbol w Mudlet to krótki string wyświetlany na mapie
+// roomChar / symbol in Mudlet is a short string displayed on the map
 
 const ARKADIA_SYMBOLS = {
   'P':  'Poczta',
@@ -101,7 +101,7 @@ const ARKADIA_SYMBOLS = {
   '+':  'Świątynia / kapliczka',
 };
 
-// Domyślne środowisko dla symbolu (>75% dominacji w mapie Arkadii + Zielarz)
+// Default environment for a symbol (>75% dominance in the Arkadia map + Zielarz)
 const SYMBOL_DEFAULT_ENV = {
   'P': 269, 'K': 266, 'S': 295, 's': 295, 'Z': 258,
   'r': 295, 'T': 295, 'p': 295, 'a': 295, 'm': 295,
@@ -111,7 +111,7 @@ const SYMBOL_DEFAULT_ENV = {
 
 /**
 /**
- * Tablica środowisk jako lista do palety (sortowana po nazwie).
+ * Environment table as a palette list (sorted by name).
  * @returns {{ envId: number, name: string, rgb: number[] }[]}
  */
 function envPaletteList() {
@@ -127,13 +127,13 @@ const ARKADIA_ENV = Object.fromEntries(
   envPaletteList().map(e => [e.envId, { name: e.name, rgb: e.rgb }])
 );
 
-// ── Detekcja Arkadii (v1.43.3) ──────────────────────────────────────────────
-// Mapy niosa wlasne kolory srodowisk (.dat v17+ w mCustomEnvColors / .arkmap
-// colors.*), wiec tabela ARKADIA_ENVS/ARKADIA_SYMBOLS to override TYLKO dla map
-// arkadianskich. true gdy: user_data.map_sync_version (marka mapsync) LUB
-// 'arkadia' w nazwie mapy/pliku LUB >=2 sygnaturowe envId (>255, z tabeli)
-// wsrod uzywanych envow pokoi albo kluczy kolorow z pliku. Czysta funkcja
-// danych — ta sama mapa daje zawsze ten sam wynik.
+// ── Arkadia detection (v1.43.3) ─────────────────────────────────────────────
+// Maps carry their own environment colors (.dat v17+ in mCustomEnvColors / .arkmap
+// colors.*), so the ARKADIA_ENVS/ARKADIA_SYMBOLS table is an override ONLY for
+// Arkadian maps. true when: user_data.map_sync_version (mapsync mark) OR
+// 'arkadia' in the map/file name OR >=2 signature envIds (>255, from the table)
+// among the room envs in use or the file's color keys. A pure function of the
+// data — the same map always gives the same result.
 const ARKADIA_SIGNATURE_ENVS = Object.keys(ARKADIA_ENVS).map(Number).filter(k => k > 255);
 function isArkadiaMap(map, filename) {
   if (!map || typeof map !== 'object') return false;

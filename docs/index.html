@@ -165,6 +165,7 @@ let routeStart = null;            // roomId — pierwszy waypoint trasy (pole St
 let routeEnd = null;              // roomId — ostatni waypoint trasy (pole Koniec / uzbrojony klik)
 let routeVias = [];               // [roomId, ...] — waypointy posrednie (miedzy Start a Koniec)
 let highlightRoom = null;         // roomId — podswietlenie z ogolnej wyszukiwarki / inspekcji
+let _lastCrossArrows = [];        // strzalki cross-area z ostatniego draw() — hit-test dblclick
 let routeLegs = [];               // [{from,to,path,hops}|null] — odcinki planu (A.planRoute)
 let planComplete = true, planTotal = 0;
 let armedField = null;            // 'start' | 'end' | 'via' | null — czeka na klik w pokoj
@@ -246,6 +247,53 @@ function innerTri(x, y, px, py, rot, R) {
   ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 
+// etykiety mapy (area.labels): tekst z kolorem fg i konturem albo oryginalna
+// pixmapa (data URI, cache per obszar|id); top=false pod pokojami, true nad.
+// no_scaling = staly rozmiar w px niezaleznie od zoomu (jak w ArkMap Studio).
+const labelImgCache = new Map();
+function drawMapLabels(top) {
+  if (!map || view.scale < 4) return;   // przy duzym oddaleniu etykiety nieczytelne
+  for (const area of map.areas || []) {
+    if (scope.areaId !== 'all' && area.id !== scope.areaId) continue;
+    for (const lbl of area.labels || []) {
+      if (scope.z !== null && lbl.z !== undefined && lbl.z !== scope.z) continue;
+      if (!!lbl.show_on_top !== top) continue;
+      if (!lbl.text && !lbl.pixmap) continue;
+      const ns = lbl.no_scaling ? 20 / view.scale : 1;   // 20 px/jednostke przy skali 1
+      const W = (lbl.width ?? 4) * ns, H = (lbl.height ?? 1.2) * ns;
+      const x = lbl.x ?? 0, y = -(lbl.y ?? 0);
+      const bgc = lbl.bg_color;
+      if (Array.isArray(bgc) && bgc.length >= 4 && bgc[3] > 0) {
+        ctx.fillStyle = `rgba(${bgc[0]},${bgc[1]},${bgc[2]},${bgc[3] / 255})`;
+        ctx.fillRect(x, y, W, H);
+      }
+      if (lbl.text) {
+        let fg = Array.isArray(lbl.fg_color) ? lbl.fg_color : [200, 200, 100];
+        const bright = (fg[0] * 299 + fg[1] * 587 + fg[2] * 114) / 1000;
+        if (bright < 60) fg = [200, 200, 80];   // podbicie ciemnych kolorow (jak Studio)
+        const ratio = Math.min(0.75, W / Math.max(lbl.text.length / 2, 1));
+        const fs = Math.max(0.1 * ns, Math.min(ratio, Math.max(H * 0.9, 0.1 * ns)));
+        ctx.font = `${fs}px system-ui, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = Math.max(0.03, fs * 0.12); ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineJoin = 'round';
+        ctx.strokeText(lbl.text, x + W / 2, y + H / 2);
+        ctx.fillStyle = `rgb(${fg[0]},${fg[1]},${fg[2]})`;
+        ctx.fillText(lbl.text, x + W / 2, y + H / 2);
+      } else if (lbl.pixmap && typeof Image !== 'undefined') {
+        const key = area.id + '|' + lbl.id;
+        let c = labelImgCache.get(key);
+        if (!c) {
+          c = { img: new Image(), loaded: false };
+          c.img.onload = () => { c.loaded = true; draw(); };
+          c.img.src = 'data:image/png;base64,' + lbl.pixmap;
+          labelImgCache.set(key, c);
+        }
+        if (c.loaded) ctx.drawImage(c.img, x, y, W, H);
+      }
+    }
+  }
+}
+
 function draw() {
   zoomPct.textContent = Math.round(view.scale / (lastFitScale || view.scale) * 100) + '%';
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
@@ -270,19 +318,66 @@ function draw() {
   const vis = roomsInScope();
   const visIds = new Set(vis.map(r => r.id));
 
-  // exits: full lines inside the scope, short stubs for connections leaving it
+  // etykiety mapy pod pokojami (show_on_top rysowane pozniej, nad pokojami)
+  drawMapLabels(false);
+
+  // exits: full lines inside the scope, arrows for known rooms outside it
+  // (cross-area/cross-level, jak w ArkMap Studio), short gray stubs for unknown targets
   ctx.lineWidth = 0.14; ctx.strokeStyle = '#565e6b';
+  const crossArrows = [];
   for (const room of vis) {
     for (const [dir, tgt] of Object.entries(room.exits || {})) {
       const d = DELTA[dir];
       const t = roomIdx.get(tgt);
       if (t && visIds.has(t.room.id)) {
         ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.room.x, -t.room.y); ctx.stroke();
+      } else if (t && d) {
+        crossArrows.push({ room, sv: [d[0], -d[1]], tgt, env: t.room.env, areaName: t.areaName });
       } else if (d) {
         ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(room.x + d[0] * 0.45, -(room.y + d[1] * 0.45)); ctx.stroke();
       }
     }
+    // special exits do znanych pokoi poza zakresem: strzalka w strone celu
+    for (const [, tgt] of Object.entries(room.special_exits || {})) {
+      const t = roomIdx.get(tgt);
+      if (!t || visIds.has(t.room.id)) continue;
+      const sv = [t.room.x - room.x, -(t.room.y - room.y)];
+      if (!sv[0] && !sv[1]) continue;
+      crossArrows.push({ room, sv, tgt, env: t.room.env, areaName: t.areaName });
+    }
   }
+  // strzalki cross-area: linia od krawedzi pokoju + grot, kolor env celu,
+  // etykieta z nazwa obszaru docelowego od progu czytelnego zoomu
+  const showCrossLbl = view.scale >= 12;
+  for (const a of crossArrows) {
+    const len = Math.hypot(a.sv[0], a.sv[1]);
+    if (!len) continue;
+    const ux = a.sv[0] / len, uy = a.sv[1] / len;
+    const tEdge = 0.36 / Math.max(Math.abs(ux), Math.abs(uy));   // przeciecie promienia z kwadratem pokoju
+    const ex = a.room.x + ux * tEdge, ey = -a.room.y + uy * tEdge;
+    const tx = ex + ux * 0.45, ty = ey + uy * 0.45;
+    const col = envColor(a.env, map?.colors);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 0.14;
+    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
+    const hl = 0.22, hw = 0.12, bx = tx - ux * hl, by = ty - uy * hl, pxv = -uy, pyv = ux;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(bx + pxv * hw, by + pyv * hw);
+    ctx.lineTo(bx - pxv * hw, by - pyv * hw);
+    ctx.closePath(); ctx.fill();
+    a.x1 = ex; a.y1 = ey; a.x2 = tx; a.y2 = ty; a.targetId = a.tgt;   // hit-test dblclick
+    if (showCrossLbl && a.areaName) {
+      const lx = tx + ux * 0.45, ly = ty + uy * 0.45;
+      ctx.font = '0.5px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 0.06; ctx.strokeStyle = 'rgba(20,23,28,0.9)';
+      ctx.strokeText(a.areaName, lx, ly);
+      ctx.fillStyle = '#dde3ea'; ctx.fillText(a.areaName, lx, ly);
+    }
+  }
+  _lastCrossArrows = crossArrows;
+  globalThis.__arkmapCrossArrows = crossArrows;   // hak smoke-harnessa
+  globalThis.__arkmapView = view;                 // hak smoke-harnessa (aktualny zoom/przesuniecie)
 
   // doors: tick across the exit line midpoint (simple demo style)
   ctx.strokeStyle = '#c8d0dc'; ctx.lineWidth = 0.12;
@@ -343,6 +438,9 @@ function draw() {
       ctx.fillText('✦', x + rs * 0.95, y - rs * 0.95);
     }
   }
+
+  // etykiety mapy nad pokojami (show_on_top), przed nakladka trasy
+  drawMapLabels(true);
 
   // route overlay: per leg (odcinki miedzy waypointami); hops (transport) przerywane
   if (routeLegs.length) {
@@ -507,6 +605,59 @@ cv.addEventListener('pointerup', e => {
   drag = null;
   if (wasClick && map) pickRoom(e);
 });
+
+// dblclick: skok za strzalka cross-area do obszaru/pokoju docelowego
+// (jak w ArkMap Studio; fallback: pokoj z dokladnie jednym wyjsciem cross-area,
+// przy kilku — kierunek najblizszy kliknieciu)
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+  if (!l2) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l2));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+cv.addEventListener('dblclick', e => {
+  if (!map) return;
+  const rect = cv.getBoundingClientRect();
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  const wx = (e.clientX - rect.left - W / 2 - view.x) / view.scale;
+  const wy = (e.clientY - rect.top - H / 2 - view.y) / view.scale;
+  let best = null, bestD = 0.4;
+  for (const a of _lastCrossArrows) {
+    if (a.targetId == null) continue;
+    const d = distToSeg(wx, wy, a.x1, a.y1, a.x2, a.y2);
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  if (best) { jumpToRoom(best.targetId); return; }
+  let near = null, nearD = 0.6;
+  for (const room of roomsInScope()) {
+    const d = Math.max(Math.abs(room.x - wx), Math.abs(-room.y - wy));
+    if (d < nearD) { nearD = d; near = room; }
+  }
+  if (!near) return;
+  const cross = [];
+  for (const [dir, tgt] of Object.entries(near.exits || {})) {
+    const t = roomIdx.get(tgt);
+    if (t && !visRoom(t)) cross.push([dir, tgt]);
+  }
+  for (const [cmd, tgt] of Object.entries(near.special_exits || {})) {
+    const t = roomIdx.get(tgt);
+    if (t && !visRoom(t)) cross.push([cmd, tgt]);
+  }
+  if (cross.length === 1) { jumpToRoom(cross[0][1]); return; }
+  if (cross.length > 1) {
+    const relX = wx - near.x, relY = wy - (-near.y);
+    let pick = null, bestDot = 0.1;
+    for (const [dir, tgt] of cross) {
+      let v = DELTA[dir];
+      if (v) v = [v[0], -v[1]];
+      else { const t = roomIdx.get(tgt).room; const vx = t.x - near.x, vy = -(t.y - near.y); const l = Math.hypot(vx, vy) || 1; v = [vx / l, vy / l]; }
+      const dot = relX * v[0] + relY * v[1];
+      if (dot > bestDot) { bestDot = dot; pick = tgt; }
+    }
+    if (pick != null) jumpToRoom(pick);
+  }
+});
+function visRoom(entry) { return visible(entry.room, entry.areaId); }
 
 // klik w pokoj: uzbrojone pole Start/Koniec = ustaw endpoint; +Via = wstaw waypoint;
 // bez uzbrojenia = inspekcja (panel informacji o pokoju + status)
@@ -848,7 +999,7 @@ function currentExportSvg() {
   const wps = effectiveWps();
   const markers = wps.map((id, i) => ({ id, color: i === 0 ? '#60a5fa' : (i === wps.length - 1 ? '#f87171' : WP_COLORS[i % WP_COLORS.length]), label: String(i + 1) }));
   if (highlightRoom != null) markers.push({ id: highlightRoom, color: '#fb923c' });
-  return A.renderSvg(map, { areaId: scope.areaId, z: scope.z, routes, markers });
+  return A.renderSvg(map, { areaId: scope.areaId, z: scope.z, routes, markers, mapLabels: true });
 }
 function downloadBlob(name, blob) {
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') { setStatus('download unavailable in this environment', 'warn'); return false; }
@@ -859,17 +1010,39 @@ function downloadBlob(name, blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   return true;
 }
-document.getElementById('expSvg').onclick = () => {
+// zapis z natywnym oknem "Zapisz jako" (nazwa do wpisania, rozszerzenie z types);
+// bez File System Access API (Firefox/Safari) albo przy bledzie API — klasyczny download
+async function saveBlob(name, mime, ext, blob) {
+  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: name, accept: { [mime]: [ext] } }] });
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      return 'saved';
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancelled';
+    }
+  }
+  return downloadBlob(name, blob) ? 'downloaded' : 'failed';
+}
+document.getElementById('expSvg').onclick = async () => {
   if (!map) return;
   const svg = currentExportSvg();
   globalThis.__arkmapLastSvg = svg;   // hak smoke-harnessa (w przegladarce bez znaczenia)
-  if (downloadBlob('map.svg', new Blob([svg], { type: 'image/svg+xml' }))) setStatus('SVG exported — current area/level with route overlay', 'ok');
+  const r = await saveBlob('map.svg', 'image/svg+xml', '.svg', new Blob([svg], { type: 'image/svg+xml' }));
+  if (r === 'saved') setStatus('SVG saved — current area/level with route overlay', 'ok');
+  else if (r === 'downloaded') setStatus('SVG exported — current area/level with route overlay', 'ok');
+  else if (r === 'cancelled') setStatus('SVG export cancelled', '');
 };
 document.getElementById('expPng').onclick = async () => {
   if (!map) return;
   try {
     const blob = await A.svgToPng(currentExportSvg(), { scale: 2 });
-    if (downloadBlob('map.png', blob)) setStatus('PNG exported — 2x, current area/level with route overlay', 'ok');
+    const r = await saveBlob('map.png', 'image/png', '.png', blob);
+    if (r === 'saved') setStatus('PNG saved — 2x, current area/level with route overlay', 'ok');
+    else if (r === 'downloaded') setStatus('PNG exported — 2x, current area/level with route overlay', 'ok');
+    else if (r === 'cancelled') setStatus('PNG export cancelled', '');
   } catch (e) { setStatus('PNG export failed: ' + e.message, 'err'); }
 };
 for (const el of [optAlgoEl, optDirEl, optTransEl]) el.onchange = () => { recomputeRoute(); draw(); };
@@ -1088,6 +1261,8 @@ function afterLoad(msg, cls) {
   ovGeom = null;
   mmDirty = true;
   _viaCache.clear();
+  labelImgCache.clear();
+  _lastCrossArrows = [];
   loadedMsg = msg; loadedCls = cls;
   emptyEl.style.display = 'none';
   setStatus(msg, cls);

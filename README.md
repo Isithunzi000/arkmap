@@ -41,11 +41,18 @@ Drag & drop a `.dat` / `.arkmap` file (or pass `?src=<url>`) and you get:
   wheel zoom and a live zoom ratio,
 - validation and checksum status — including per-line transport integrity,
 - room search with jump & highlight and a room info panel,
+- cross-area exits drawn as arrows colored by the target environment, with
+  the target area name — double-click an arrow (or a room with a single
+  cross-area exit) to jump straight to that area and room,
+- map labels from the file (styled text and original Mudlet pixmaps),
+  rendered under/above the rooms exactly as stored,
 - multi-waypoint route planning on `arkmap/graph` (Dijkstra/A*, direction
   filters, transport modes) with a schematic route overview, fit-route and
   gen-3 `arkmap:` route codes (live export / paste import) via
   `arkmap/waypoints`,
-- true-vector SVG / PNG export of the current view via `arkmap/render-svg`.
+- true-vector SVG / PNG export of the current view via `arkmap/render-svg`,
+  with a native save-as dialog (typed filename) where the browser supports
+  it — arrows and map labels included.
 
 The viewer's source is a single hand-written `docs/index.html` — a practical
 example of building a full map app on the package with zero dependencies.
@@ -336,27 +343,37 @@ searchIndexed(idx, 'karczma smok');           // multi-word: intersect, cumulati
 
 `renderSvg(map, opts)` renders a map to a **true-vector SVG string** — no
 raster inside. Scope filters (`areaId`, `z`), env colors (same resolution
-chain as the demo viewer), exits with undirected dedup and out-of-scope
-stubs, optional room-name labels, route overlays (walking segments solid,
-transport hops dashed) and waypoint markers. Fully deterministic: same input,
-byte-identical SVG. Available from the root and under the `arkmap/render-svg`
-subpath.
+chain as the demo viewer), exits with undirected dedup, arrowheads colored by
+the target environment for exits leading to a known room outside the scope
+(plain stubs for unknown targets), optional room-name labels, optional map
+labels (`mapLabels: true` — styled text and pixmap images from `area.labels`,
+honouring `show_on_top` and the `z` filter), route overlays (walking segments
+solid, transport hops dashed) and waypoint markers. Fully deterministic: same
+input, byte-identical SVG. Available from the root and under the
+`arkmap/render-svg` subpath.
 
 `svgToPng(svg, { scale = 2 })` rasterizes such a self-contained SVG to a PNG
 `Blob` in the **browser** (Blob URL → `<img>` → canvas → `toBlob`; the canvas
 stays untainted because the SVG has no external references). Available from
 the root and under the `arkmap/render-png` subpath.
 
+`renderPng(map, opts)` is the one-call convenience — `renderSvg(map, opts)` +
+`svgToPng` with the same options (everything above, arrows and map labels
+included) plus `pngScale` (default 2). PNG output therefore carries exactly
+what the SVG would. Same module, same browser-only rule.
+
 ```js
 import { renderSvg } from 'arkmap/render-svg';
-import { svgToPng } from 'arkmap/render-png';
+import { svgToPng, renderPng } from 'arkmap/render-png';
 
 const svg = renderSvg(map, {
   areaId: 'all', z: null,
+  mapLabels: true,                                 // text + pixmap area labels
   routes: [{ path, hops }],                        // optional overlay
   markers: [{ id: 2188, color: '#60a5fa', label: '1' }],
 });
 const pngBlob = await svgToPng(svg, { scale: 2 }); // browser only
+const samePng = await renderPng(map, { areaId: 'all', mapLabels: true, pngScale: 2 });
 ```
 
 ## Testing & guarantees

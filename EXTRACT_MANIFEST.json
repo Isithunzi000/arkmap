@@ -1,0 +1,94 @@
+{
+  "source": {
+    "repo": "Isithunzi000/arkadia-web_standalone-arkmap_studio",
+    "file": "arkmap_studio.html",
+    "sha": "24bd9022895753779758e5c58286565c76d85d19",
+    "sha256": "4a9523a1b348214115544514904bc97bdcb4527864b29dc1b2fce6192af6a061"
+  },
+  "generated": {
+    "src/constants.js": {
+      "lines": [
+        4234,
+        4278
+      ],
+      "sha256": "08d214f2c02fed84c7cbb85c8760a867835185dfd6a655d35ede73fdd473998c"
+    },
+    "src/arkadia.js": {
+      "lines": [
+        4279,
+        4431
+      ],
+      "sha256": "37c43f6fe7b39b0af2c278d680ea7b47415a104d93280dd5dfd44da7090d7df4"
+    },
+    "src/validate.js": {
+      "lines": [
+        4434,
+        4798
+      ],
+      "sha256": "1e90048fd9e2d696a6779ff23a59293ac90a1b7f48e3fffb83a64889315c4b9c"
+    },
+    "src/checksum.js": {
+      "lines": [
+        4799,
+        5552
+      ],
+      "sha256": "52b36ace0f64a392fb7181efbf0adea7a48f1e4522aa28b98ed54cb1994caee1"
+    },
+    "src/mudlet-dat.js": {
+      "lines": [
+        5553,
+        6540
+      ],
+      "sha256": "ed19331547d6c37b55d50d9466ce50e7bd9bfe73ab312bd6b1bda2b4cba17a8b"
+    },
+    "src/dat-to-arkmap.js": {
+      "lines": [
+        6541,
+        6769
+      ],
+      "sha256": "7792a1834f62ee6572ab2fa9c484efe8dd28b7cb78065d640b9a48e48c8d41e2"
+    },
+    "src/arkmap-to-dat.js": {
+      "lines": [
+        6770,
+        6958
+      ],
+      "sha256": "a89edbd6a2dd43c5531911fb8ad0649ca1ba4dce57a73d615950ad7f9370f068"
+    },
+    "src/ansi-pal.js": {
+      "lines": [
+        7201,
+        7218
+      ],
+      "sha256": "b3613060c6b576637eebbff5732d2535189e1ed46e84c2bdfa7342a598fef766"
+    },
+    "src/opposite.js": {
+      "lines": [
+        8049,
+        8054
+      ],
+      "sha256": "1965d6373d89dc5005b148ef1406f7ca73fd09288b97ff9278510e2007a3178e"
+    },
+    "src/stable-stringify.js": {
+      "lines": [
+        10512,
+        10535
+      ],
+      "sha256": "c72ea149a158db4b0493e5c6e71b65ee269993716453cb4fc44957886dc7ecb5"
+    },
+    "src/canonicalize.js": {
+      "lines": [
+        10590,
+        10606
+      ],
+      "sha256": "4ef19bb68ed34146d3dd5ac25085afe0fb4aabea9d9057cec6109b74be31c3f2"
+    },
+    "src/suppressors.js": {
+      "lines": [
+        19357,
+        19413
+      ],
+      "sha256": "ae4769d5d23f10da1a716b8b6f65b4f475ad648e49304a4b94eb46218b671659"
+    }
+  }
+}

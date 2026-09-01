@@ -1,0 +1,42 @@
+{
+  "name": "arkmap",
+  "version": "1.0.0",
+  "description": "Mudlet map toolkit for the web: read/write .dat and .arkmap, validate, verify checksums, convert both ways. Zero dependencies.",
+  "author": "Isithunzi000",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./arkadia": "./src/arkadia.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/",
+    "EXTRACT_MANIFEST.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "extract": "node scripts/extract.mjs",
+    "test": "node --test tests/",
+    "parity": "node scripts/extract.mjs --check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Isithunzi000/arkmap"
+  },
+  "keywords": [
+    "mudlet",
+    "mud",
+    "arkadia",
+    "map",
+    "arkmap",
+    "dat",
+    "mapper"
+  ]
+}

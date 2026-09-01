@@ -40,7 +40,12 @@
 <header>
   <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
+  <button class="btn" id="btnFit" hidden>Fit</button>
   <input type="file" id="file" accept=".dat,.arkmap" hidden>
+  <span id="searchBox" hidden style="position:relative">
+    <input id="search" placeholder="Search room (name or #id)…" autocomplete="off" style="background:#1e232b;color:#dde3ea;border:1px solid #2a3038;border-radius:6px;padding:6px 10px;font-size:13px;width:240px">
+    <div id="searchResults" style="position:absolute;top:110%;left:0;min-width:340px;max-height:300px;overflow:auto;background:#1e232b;border:1px solid #2a3038;border-radius:6px;display:none;z-index:10"></div>
+  </span>
   <select id="selArea" hidden></select>
   <select id="selZ" hidden></select>
   <span id="status">no map loaded — drop a file anywhere</span>
@@ -62,6 +67,9 @@ const progEl = document.getElementById('progress'), progBar = progEl.querySelect
 let map = null, view = { x: 0, y: 0, scale: 14 };
 let roomIdx = new Map();          // roomId -> { room, areaId }
 let scope = { areaId: 'all', z: null };
+let currentLoc = null;            // roomId — "pozycja" (klik na pokoj)
+let targetRoom = null;            // roomId — cel z wyszukiwarki
+let route = null;                 // [roomId, ...] — aktywna trasa
 
 // Mudlet direction deltas (data coords; screen Y is negated at draw time)
 const DELTA = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
@@ -224,6 +232,37 @@ function draw() {
       ctx.fillText('✦', x + rs * 0.95, y - rs * 0.95);
     }
   }
+
+  // route overlay (segmenty widoczne w biezacym zakresie)
+  if (route && route.length > 1) {
+    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 0.3; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i + 1 < route.length; i++) {
+      const a = roomIdx.get(route[i])?.room, b = roomIdx.get(route[i + 1])?.room;
+      if (!a || !b || !visIds.has(a.id) || !visIds.has(b.id)) continue;
+      ctx.moveTo(a.x, -a.y); ctx.lineTo(b.x, -b.y);
+    }
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+
+  // highlight: pozycja (niebieski) i cel (pomaranczowy)
+  const ring = (room, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 0.22;
+    ctx.strokeRect(room.x - rs - 0.14, -room.y - rs - 0.14, (rs + 0.14) * 2, (rs + 0.14) * 2);
+  };
+  if (currentLoc != null) {
+    const e = roomIdx.get(currentLoc);
+    if (e && visible(e.room, e.areaId)) ring(e.room, '#60a5fa');
+  }
+  if (targetRoom != null) {
+    const e = roomIdx.get(targetRoom);
+    if (e && visible(e.room, e.areaId)) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.3;
+      ctx.strokeRect(e.room.x - rs - 0.26, -e.room.y - rs - 0.26, (rs + 0.26) * 2, (rs + 0.26) * 2);
+      ring(e.room, '#fb923c');
+    }
+  }
   ctx.restore();
 }
 
@@ -287,9 +326,90 @@ selArea.onchange = () => {
 selZ.onchange = () => { scope.z = parseInt(selZ.value); fit(); draw(); };
 
 let drag = null;
-cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener('pointermove', e => { if (!drag) return; view.x += e.clientX - drag.x; view.y += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; draw(); });
-cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (!drag) return; drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y); view.x += e.clientX - drag.x; view.y += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY, moved: drag.moved }; draw(); });
+cv.addEventListener('pointerup', e => {
+  const wasClick = drag && drag.moved < 5;
+  drag = null;
+  if (wasClick && map) pickRoom(e);
+});
+
+// klik = ustaw "pozycje" (punkt startowy tras)
+function pickRoom(e) {
+  const rect = cv.getBoundingClientRect();
+  const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  const wx = (e.clientX - rect.left - W / 2 - view.x) / view.scale;
+  const wy = (e.clientY - rect.top - H / 2 - view.y) / view.scale;
+  let best = null, bestD = 0.6;   // promien trafienia w jednostkach mapy
+  for (const room of roomsInScope()) {
+    const d = Math.hypot(room.x - wx, -room.y - wy);
+    if (d < bestD) { best = room; bestD = d; }
+  }
+  if (best) {
+    currentLoc = best.id;
+    recomputeRoute();
+    draw();
+  }
+}
+
+function recomputeRoute() {
+  if (currentLoc != null && targetRoom != null && currentLoc !== targetRoom) {
+    route = findPath(currentLoc, targetRoom, roomIdx);
+  } else {
+    route = null;
+  }
+}
+
+function centerOn(room, minScale = 12) {
+  if (view.scale < minScale) view.scale = minScale;
+  view.x = -room.x * view.scale;
+  view.y = room.y * view.scale;
+}
+
+function jumpToRoom(roomId) {
+  const e = roomIdx.get(roomId);
+  if (!e) return;
+  targetRoom = roomId;
+  scope.areaId = e.areaId;
+  scope.z = e.room.z ?? 0;
+  selArea.value = String(scope.areaId);
+  populateZ();
+  selZ.value = String(scope.z);
+  centerOn(e.room);
+  recomputeRoute();
+  draw();
+  const areaName = (map.areas || []).find(a => a.id === e.areaId)?.name || e.areaId;
+  const steps = route ? ` — route from selected position: ${route.length - 1} step(s)` : (currentLoc != null ? ' — no route from selected position' : '');
+  setStatus(`${e.room.name || 'room'} (#${roomId}) — ${areaName}, z=${scope.z}${steps}`, route || currentLoc == null ? 'ok' : 'warn');
+}
+
+// --- wyszukiwarka pokoi ---
+const searchEl = document.getElementById('search'), searchRes = document.getElementById('searchResults');
+searchEl.addEventListener('input', () => {
+  const hits = searchRooms(searchEl.value, map);
+  if (!hits.length) { searchRes.style.display = 'none'; return; }
+  searchRes.innerHTML = '';
+  for (const h of hits) {
+    const div = document.createElement('div');
+    div.textContent = `${h.room.name || '(unnamed)'} — #${h.room.id} — ${h.areaName}`;
+    div.style.cssText = 'padding:6px 10px;cursor:pointer;font-size:13px';
+    div.onmouseenter = () => div.style.background = '#2a3038';
+    div.onmouseleave = () => div.style.background = '';
+    div.onclick = () => { searchRes.style.display = 'none'; searchEl.value = h.room.name || String(h.room.id); jumpToRoom(h.room.id); };
+    searchRes.appendChild(div);
+  }
+  searchRes.style.display = 'block';
+});
+searchEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const hits = searchRooms(searchEl.value, map);
+    if (hits.length) { searchRes.style.display = 'none'; jumpToRoom(hits[0].room.id); }
+  }
+  if (e.key === 'Escape') { searchRes.style.display = 'none'; searchEl.blur(); }
+});
+document.addEventListener('click', (e) => { if (!searchRes.contains(e.target) && e.target !== searchEl) searchRes.style.display = 'none'; });
+
+document.getElementById('btnFit').onclick = () => { fit(); draw(); };
 cv.addEventListener('wheel', e => { e.preventDefault(); view.scale = Math.max(2, Math.min(60, view.scale * (e.deltaY < 0 ? 1.15 : 0.87))); draw(); }, { passive: false });
 
 function afterLoad(msg, cls) {
@@ -297,11 +417,99 @@ function afterLoad(msg, cls) {
   for (const area of map.areas || []) {
     for (const room of area.rooms || []) roomIdx.set(room.id, { room, areaId: area.id });
   }
+  currentLoc = null; targetRoom = null; route = null;
   emptyEl.style.display = 'none';
   setStatus(msg, cls);
   populateSelectors();
+  document.getElementById('btnFit').hidden = false;
+  document.getElementById('searchBox').hidden = false;
   fit(); draw();
 }
+
+// ===GRAPH-BEGIN===
+// Demo-local graph helpers (pathfinding lands in the package as arkmap/graph in v2).
+// Dijkstra over exits + special_exits, weight = exit_weights[dir] (default 1).
+function neighborsOf(room) {
+  const out = [];
+  for (const [dir, tgt] of Object.entries(room.exits || {})) {
+    let w = room.exit_weights?.[dir];
+    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
+    out.push([tgt, w]);
+  }
+  for (const [cmd, tgt] of Object.entries(room.special_exits || {})) {
+    let w = room.exit_weights?.[cmd];
+    if (typeof w !== 'number' || w < 0 || !Number.isFinite(w)) w = 1;
+    out.push([tgt, w]);
+  }
+  return out;
+}
+
+function findPath(fromId, toId, idx) {   // idx: Map roomId -> { room, areaId }
+  if (!idx.has(fromId) || !idx.has(toId)) return null;
+  if (fromId === toId) return [fromId];
+  const dist = new Map([[fromId, 0]]);
+  const prev = new Map();
+  // binary heap [cost, id]
+  const heap = [[0, fromId]];
+  const push = (item) => {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+      }
+    }
+    return top;
+  };
+  while (heap.length) {
+    const [d, id] = pop();
+    if (id === toId) {
+      const path = [toId];
+      let cur = toId;
+      while (prev.has(cur)) { cur = prev.get(cur); path.push(cur); }
+      return path.reverse();
+    }
+    if (d > (dist.get(id) ?? Infinity)) continue;
+    for (const [nid, w] of neighborsOf(idx.get(id).room)) {
+      if (!idx.has(nid)) continue;
+      const nd = d + w;
+      if (nd < (dist.get(nid) ?? Infinity)) { dist.set(nid, nd); prev.set(nid, id); push([nd, nid]); }
+    }
+  }
+  return null;
+}
+
+function searchRooms(query, mapObj, limit = 25) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  const asId = /^#?(\d+)$/.exec(q);
+  const out = [];
+  for (const area of mapObj?.areas || []) {
+    for (const room of area.rooms || []) {
+      const name = (room.name || '').toLowerCase();
+      const hit = asId ? room.id === parseInt(asId[1]) : name.includes(q);
+      if (hit) out.push({ room, areaId: area.id, areaName: area.name || String(area.id) });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+// ===GRAPH-END===
 
 // ===CHECKSUM-STATUS-BEGIN===
 // Szczegolowy status integralnosci: co jest zepsute i gdzie (pokoj/area/meta/alg).

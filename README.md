@@ -454,10 +454,6 @@ both formats and signed deltas, apply matrix across base/target formats).
 The Arkadia map data originates from the community crowd-mapping project at
 [Delwing/arkadia-mapa](https://github.com/Delwing/arkadia-mapa).
 
-File signing (identity registry) is intentionally out of scope; files written
-by this package are unsigned. Signed files can still be read and their
-checksums verified.
-
 ## Internationalization
 
 The package is English-first: all code, comments and default output are

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>arkmap — demo viewer</title>
+<title>arkmap-js — demo viewer</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -79,7 +79,7 @@
 </head>
 <body>
 <header>
-  <h1>arkmap <span>— demo viewer (npm package, zero deps)</span></h1>
+  <h1>arkmap-js <span>— demo viewer (npm package, zero deps)</span></h1>
   <button class="btn" id="open">Open .dat / .arkmap…</button>
   <button class="btn mini" id="expSvg" hidden title="export current area/level as a vector SVG (with route overlay)">SVG</button>
   <button class="btn mini" id="expPng" hidden title="export current area/level as PNG, 2x (with route overlay)">PNG</button>
@@ -119,7 +119,7 @@
 </header>
 <div id="wrap">
   <canvas id="cv"></canvas>
-  <div id="empty"><div>Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.</div><div>Parsing, validation and checksums run locally via the <code>arkmap</code> package.</div></div>
+  <div id="empty"><div>Drop a Mudlet <code>.dat</code> or <code>.arkmap</code> file here.</div><div>Parsing, validation and checksums run locally via the <code>arkmap-js</code> package.</div></div>
   <div id="progress"><div class="box"><div class="label">loading…</div><div class="track"><div class="bar"></div></div></div></div>
   <div id="drop">drop to load</div>
   <div id="zoomBar" hidden>
@@ -1393,7 +1393,7 @@ function loadArkmapText(fileName, text) {
 function loadDatBuffer(fileName, buf) {
   map = A.datToArkmap(buf);
   const rooms = (map.areas || []).reduce((s, a) => s + (a.rooms || []).length, 0);
-  afterLoad(`${fileName} — ${rooms} rooms — .dat converted by arkmap`, 'ok');
+  afterLoad(`${fileName} — ${rooms} rooms — .dat converted by arkmap-js`, 'ok');
 }
 
 // local file: FileReader with progress events (uniform for .dat and .arkmap)

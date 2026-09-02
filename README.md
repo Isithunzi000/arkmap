@@ -1,6 +1,6 @@
-# arkmap
+# arkmap-js
 
-**arkmap** is a toolkit for MUD map files in JavaScript — Node.js and the
+**arkmap-js** is a toolkit for MUD map files in JavaScript — Node.js and the
 browser. It provides full support for Mudlet's native binary map format
 (`.dat` — read, write, convert both ways) and acts as a bridge to **`.arkmap`**
 — this project's own JSON map format for MUD games. `.arkmap` is not a Mudlet
@@ -31,7 +31,7 @@ const text = saveArkmap(map);
 
 ## Demo viewer
 
-**Try it now, no install: [isithunzi000.github.io/arkmap](https://isithunzi000.github.io/arkmap/)**
+**Try it now, no install: [isithunzi000.github.io/arkmap-js](https://isithunzi000.github.io/arkmap-js/)**
 — a zero-build viewer that runs entirely on this package, in your browser.
 
 Drag & drop a `.dat` / `.arkmap` file (or pass `?src=<url>`) and you get:

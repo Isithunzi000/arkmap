@@ -90,7 +90,8 @@ Full format documentation (maintained alongside ArkMap Studio):
 ### Repository layout
 
 ```
-src/            library modules (constants, codecs, validation, checksums, converters, graph/routing, transports, waypoints, diff)
+src/            library modules (constants, codecs, validation, checksums, converters, graph/routing,
+                transports, waypoints, diff, edit deltas, search index, i18n, rendering)
 scripts/        extract.mjs (module pipeline), run-tests.mjs, build-demo.mjs
 tests/          node:test suites + golden fixtures and oracle vectors
 docs/           demo viewer (GitHub Pages) + prebuilt browser bundle
@@ -101,7 +102,7 @@ EXTRACT_MANIFEST.json   module build manifest
 
 | command | what it does |
 |---|---|
-| `npm test` | run the test suites (checksum oracle vectors, round-trips) |
+| `npm test` | run the full node:test suite — round-trips, checksum oracle vectors, validation & i18n, graph/routing, transports, waypoints, diff, .arkdelta, rendering |
 | `npm run parity` | regenerate `src/` in memory and fail on any drift from the manifest |
 | `npm run extract` | regenerate `src/` modules per the manifest |
 
@@ -137,7 +138,7 @@ lossless.
 |---|---|
 | `validate(map, opts?)` | structural validation → `{ ok, errors[], warnings[] }`; errors carry `{ path, code, msg }` — `code` is stable/machine-readable, `msg` follows `opts.locale` (see [Internationalization](#internationalization)) |
 | `addChecksums(map)` | compute and attach v4 checksums (in place) |
-| `verifyChecksums(map)` | verify → `{ ok, fileOk, metaOk, badAreas[], badRooms[], ... }` |
+| `verifyChecksums(map)` | verify → `{ present, ok, fileOk, metaOk, badAreas[], badRooms[], missingRooms[], missingAreas[], extraRooms[], extraAreas[] }`; `present: false` means the map is unsigned (then `ok: true`); `metaOk` is informational only and never lowers `ok` |
 | `checkSuppressorsInMap(map)` | data-quality lint: missing custom-line suppressors |
 
 #### Constants
@@ -290,7 +291,7 @@ if (d && !d.error) console.log(d.valid, d.algorithm, d.dirMode, d.transportMode)
 
 `diffMaps(srcMap, dstMap)` compares two maps and returns a list of **edit
 operations** that turn the first map into the second: *what* changed
-(`ADD_ROOM`, `DELETE_EXIT`, `EDIT_LABEL`, `PAINT_BATCH`, … — 20 op types
+(`ADD_ROOM`, `DELETE_EXIT`, `EDIT_LABEL`, `PAINT_BATCH`, … — 21 op types
 covering areas, rooms, exits, moves, env colors, custom lines and labels),
 *where* (room/area ids), and the *before/after* state where reverting matters.
 The list is **topologically ordered**, so applying the ops top to bottom never
@@ -452,7 +453,12 @@ diff over 1,008 scenarios (hand-written, a real-map slice and seeded fuzz)
 matches with zero differences, and a headless-Chromium pixel diff of the same
 map view shows the raster tier pixel-identical, roomsOnly at 0.05% and full
 mode at 1.17% of pixels — all of it 1px antialiasing fringe from transformed
-rasterization (structural delta <= 0.02%).
+rasterization (structural delta <= 0.02%). On top of the oracle, the display
+engine survives a seeded property fuzz — thousands of random maps checked for
+save/load round-trip equality, checksum and validation consistency,
+renderer-op finiteness and SVG determinism — and a headless-Chromium pixel
+fuzz across seeded fixtures and zoom tiers, where the only differences are
+the same antialiasing fringe.
 
 ## Testing & guarantees
 

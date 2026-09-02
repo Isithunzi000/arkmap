@@ -5082,7 +5082,7 @@ function searchRooms(query, mapObj, limit = 25) {
 //   crc8:  first 8 hex chars of xxh3_64hex over the lowercased prefix
 //          "arkmap:<flags>:<ids>" — paste-integrity check (typos, truncated
 //          or mangled codes), not a security feature
-// Example: arkmap:dwp:2188,1998,729:9f2c41aa
+// Example: arkmap:dwp:2188,1998,729:16990e69
 //
 // The encoder always emits lowercase; the decoder lowercases the whole code
 // before parsing, so letter case is insignificant everywhere (prefix, flags,

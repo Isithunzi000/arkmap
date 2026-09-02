@@ -1,6 +1,6 @@
 {
   "name": "arkmap-js",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Mudlet map toolkit for Node.js and the browser: read/write .dat and .arkmap maps, validate, XXH3-64 checksums, map diff, .arkdelta edit deltas (validate/build/apply, Ed25519 signature verification), routing, transports, waypoint route codes, token-indexed search, SVG/PNG rendering. Zero dependencies, ESM, EN/PL.",
   "author": "Isithunzi000",
   "license": "MIT",
@@ -16,6 +16,7 @@
     "./waypoints": "./src/waypoints.js",
     "./diff": "./src/diff.js",
     "./search-index": "./src/search-index.js",
+    "./render-model": "./src/render-model.js",
     "./render-svg": "./src/render-svg.js",
     "./render-png": "./src/render-png.js",
     "./package.json": "./package.json",

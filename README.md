@@ -44,8 +44,8 @@ Drag & drop a `.dat` / `.arkmap` file (or pass `?src=<url>`) and you get:
 - cross-area exits drawn as arrows colored by the target environment, with
   the target area name — double-click an arrow (or a room with a single
   cross-area exit) to jump straight to that area and room,
-- map labels from the file (styled text and original Mudlet pixmaps),
-  rendered under/above the rooms exactly as stored,
+- map labels from the file (styled text, sized and placed exactly like ArkMap
+  Studio's default text-label mode), rendered under/above the rooms as stored,
 - multi-waypoint route planning on `arkmap-js/graph` (Dijkstra/A*, direction
   filters, transport modes) with a schematic route overview, fit-route and
   gen-3 `arkmap:` route codes (live export / paste import) via
@@ -431,6 +431,28 @@ const svg = renderSvg(map, {
 const pngBlob = await svgToPng(svg, { scale: 2 }); // browser only
 const samePng = await renderPng(map, { areaId: 'all', mapLabels: true, pngScale: 2 });
 ```
+
+#### Studio display parity (render-model)
+
+`arkmap-js/render-model` is the shared display engine behind the demo viewer
+and `renderSvg`: pure functions that turn map data into drawing ops in map
+units (screen Y is the negated data Y), parameterized by cell size in px.
+Rooms, env colors (full resolution chain: ANSI palette < Arkadia environments
+< `env_colors` < `custom_env_colors`), exits (widths, dashes, one-way
+arrowheads, doors at the drawn-line midpoint), stubs, custom lines (styles,
+doors, arrows), cross-area arrows, room symbols, special-exit markers, hidden
+rooms, stack shadows and the adaptive LOD tiers (`full` / `roomsOnly` /
+`raster`, with a budget-based raster fallback) all reproduce ArkMap Studio's
+non-edit display 1:1 — same classification, geometry, colors and zoom gates.
+Editor-only features (selection handles, edit markers beyond the default
+special-exit marker, drag previews) are intentionally out of scope.
+
+Parity is verified against the Studio original as an oracle: an op-stream
+diff over 1,008 scenarios (hand-written, a real-map slice and seeded fuzz)
+matches with zero differences, and a headless-Chromium pixel diff of the same
+map view shows the raster tier pixel-identical, roomsOnly at 0.05% and full
+mode at 1.17% of pixels — all of it 1px antialiasing fringe from transformed
+rasterization (structural delta <= 0.02%).
 
 ## Testing & guarantees
 

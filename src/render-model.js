@@ -508,6 +508,45 @@ function stackShadowsOp(room, cellPx) {
 }
 function exits_up_down(ex) { return !!(ex.up || ex.down); }
 
+// Studio drawExits (8424-8536) collects EVERY cross-area exit — regular or
+// special — into the cross list, even when a custom line owns the direction
+// (hasCL): the arrow is skipped but the area label (drawCrossAreaLabels) and
+// the dblclick hit-test still apply. Returns [{ dir, targetId, target, hasCL,
+// edge, anchor, svec, op }] in screen-map units (y down): edge = room-edge
+// point, anchor = arrow tip = label anchor, svec = screen-space direction,
+// op = arrow op or null (hasCL or below the cross-arrow zoom gate).
+function crossExitEntries(room, plane, cache, cellPx) {
+  const out = [];
+  const rsPx = _rsPx(cellPx);
+  const tickLen = _u(Math.max(4, rsPx * 0.9), cellPx);
+  const push = (dir, targetId, target, svec) => {
+    const hasCL = !!(room.custom_lines && room.custom_lines[dir]);
+    const [ex, ey] = edgePoint(room.x, -room.y, ROOM_HALF, svec);
+    const anchor = [ex + svec[0] * tickLen, ey + svec[1] * tickLen];
+    // crossArrowOp takes a DATA-space vec (negates Y internally) — invert svec
+    const op = hasCL ? null : crossArrowOp(room, [svec[0], -svec[1]], target, cache, cellPx);
+    out.push({ dir, targetId, target, hasCL, edge: [ex, ey], anchor, svec, op });
+  };
+  for (const [dir, targetId] of Object.entries(room.exits || {})) {
+    const vec = DIR_VEC[dir];
+    if (!vec || (!vec[0] && !vec[1])) continue;
+    const target = plane.byId.get(targetId) || null;
+    if (target && plane.areaOf.get(targetId) === plane.areaId) continue;
+    push(dir, targetId, target, [vec[0], -vec[1]]);
+  }
+  for (const [cmd, targetId] of Object.entries(room.special_exits || {})) {
+    const target = plane.byId.get(targetId) || null;
+    if (!target) continue;
+    if (plane.areaOf.get(targetId) === plane.areaId) continue;
+    const dx = target.x - room.x, dy = target.y - room.y;
+    const len = Math.hypot(dx, dy);
+    if (!len) continue;
+    // Studio (8530-8532) applies the special-exit vec to screen coords as-is
+    push(cmd, targetId, target, [dx / len, dy / len]);
+  }
+  return out;
+}
+
 // Studio drawExits cross-area SPECIAL exits (8523-8540): a special exit to a
 // KNOWN room in ANOTHER area gets a cross arrow aimed at the target coords,
 // unless a custom line owns that command (hasCL). Same-area / unknown target:
@@ -531,4 +570,4 @@ function specialCrossArrows(room, plane, cache, cellPx) {
   return out;
 }
 
-export { CELL, ROOM_UNITS, ROOM_HALF, DEFAULT_ROOM_RGB, LINE_CSS, ONE_WAY_FILL, CROSS_UNKNOWN_CSS, CL_DEFAULT_CSS, DOOR_CSS, HIDDEN_FADE, RASTER_LINE_ALPHA, LOD_MIN_CELL_PX, LOD_ROOMS_BUDGET, LOD_RASTER_CELL_PX, DIR_VEC, OPP_DIR, UDIO_DIRS, buildColorCache, roomColorCss, roomColorRgb, isRoomHidden, hiddenRoomStyle, contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits, exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows };
+export { CELL, ROOM_UNITS, ROOM_HALF, DEFAULT_ROOM_RGB, LINE_CSS, ONE_WAY_FILL, CROSS_UNKNOWN_CSS, CL_DEFAULT_CSS, DOOR_CSS, HIDDEN_FADE, RASTER_LINE_ALPHA, LOD_MIN_CELL_PX, LOD_ROOMS_BUDGET, LOD_RASTER_CELL_PX, DIR_VEC, OPP_DIR, UDIO_DIRS, buildColorCache, roomColorCss, roomColorRgb, isRoomHidden, hiddenRoomStyle, contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits, exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows, crossExitEntries };

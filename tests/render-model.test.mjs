@@ -10,7 +10,7 @@ import {
   buildColorCache, roomColorCss, isRoomHidden, hiddenRoomStyle, symbolColorCss,
   symbolFillCss, classifyExit, exitLineOp, crossArrowOp, stubOps, dashPattern,
   customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp,
-  gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows,
+  gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows, crossExitEntries,
 } from '../src/render-model.js';
 
 const Z1 = CELL; // cellPx at zoom 1
@@ -312,6 +312,34 @@ test('specialCrossArrows: cross-area special exit gets an arrow, hasCL suppresse
   assert.equal(out.length, 1, 'only cross-area without CL');
   assert.equal(out[0].cmd, 'zejdz');
   assert.ok(out[0].op.head, 'arrow head present');
+});
+
+test('crossExitEntries: every cross exit collected, hasCL keeps label entry without arrow', () => {
+  const cache = buildColorCache({ areas: [], colors: {} });
+  const a = R(1, 0, 0, {
+    exits: { e: 10, w: 11, n: 12 },
+    special_exits: { 'zejdz': 13, 'skocz': 14 },
+    custom_lines: { w: { points: [[1, 1]] }, 'skocz': { points: [] } },   // w: CL, skocz: suppressor
+  });
+  const mk = (id, area) => R(id, 4, 3, { _area: area });
+  const plane = mkPlane([a, mk(10, 2), mk(11, 2), mk(13, 2), mk(14, 2)]);  // 12 unknown target
+  const out = crossExitEntries(a, plane, cache, Z1);
+  const byDir = Object.fromEntries(out.map(e => [e.dir, e]));
+  assert.equal(out.length, 5, 'e, w, n(unknown), zejdz, skocz — all cross entries collected');
+  assert.ok(byDir.e.op && !byDir.e.hasCL, 'plain cross -> arrow op');
+  assert.equal(byDir.w.op, null, 'CL-owned cross -> no arrow op');
+  assert.ok(byDir.w.hasCL && byDir.w.anchor, 'CL-owned cross still has a label anchor');
+  assert.equal(byDir.skocz.op, null, 'suppressed special cross -> no arrow op');
+  assert.ok(byDir.skocz.hasCL && byDir.skocz.anchor, 'suppressed special cross still labelled');
+  assert.equal(byDir.n.target, null, 'unknown target -> entry with null target');
+  assert.ok(byDir.zejdz.op, 'special cross without CL -> arrow op');
+  // anchor geometry: arrow tip of the matching crossArrowOp
+  const ref = crossArrowOp(a, DIR_VEC.e, byDir.e.target, cache, Z1);
+  assert.deepEqual(byDir.e.anchor, [ref.line[2], ref.line[3]], 'anchor = arrow tip');
+  // same-area targets are not cross
+  const b = R(5, 0, 0, { exits: { e: 6 }, special_exits: { 'x': 7 } });
+  const plane2 = mkPlane([b, mk(6, 1), mk(7, 1)]);
+  assert.equal(crossExitEntries(b, plane2, cache, Z1).length, 0, 'same-area exits excluded');
 });
 
 test('symbolOp halo: light glyph -> dark halo, dark glyph -> light halo', () => {

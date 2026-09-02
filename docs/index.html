@@ -292,13 +292,12 @@ function drawCrossArrowOverlay() {
   const hw = Math.max(1.5, rsPx * 0.35);
   const vis = roomsInScope();
   for (const a of _lastCrossArrows) {
-    const ex = toSX(a.op.line[0]), ey = toSY(a.op.line[1]);
-    const ax = toSX(a.op.line[2]), ay = toSY(a.op.line[3]);
+    const ex = toSX(a.edge[0]), ey = toSY(a.edge[1]);
+    const ax = toSX(a.anchor[0]), ay = toSY(a.anchor[1]);
     a.smx = (ex + ax) / 2; a.smy = (ey + ay) / 2;          // hit-test dblclick (px ekranu)
     a.hitR = Math.max(15, Math.hypot(ax - ex, ay - ey) * 1.5);
     a.stx = ax; a.sty = ay;                                // kotwica etykiety
-    const l = Math.hypot(a.op.line[2] - a.op.line[0], a.op.line[3] - a.op.line[1]) || 1;
-    a.ux = (a.op.line[2] - a.op.line[0]) / l; a.uy = (a.op.line[3] - a.op.line[1]) / l;
+    a.ux = a.svec[0]; a.uy = a.svec[1];                    // kierunek (ekran, jednostkowy)
   }
   if (cellPx < RM.CELL * 0.5) return;                      // Studio: etykiety od zoomu 0.5
   const fontSize = Math.max(8, Math.min(11, zoom * 8));
@@ -394,21 +393,18 @@ function drawExitsModel(vis, cellPx) {
           ctx.strokeStyle = d.color; ctx.lineWidth = d.width; ctx.setLineDash([]);
           ctx.strokeRect(d.cx - d.side / 2, d.cy - d.side / 2, d.side, d.side);
         }
-      } else if (cls.kind === 'cross') {
-        const op = RM.crossArrowOp(room, RM.DIR_VEC[dir], cls.target, colorCache, cellPx);
-        if (op) {
-          drawArrow(op);
-          crossArrows.push({ op, targetId: tgt, target: cls.target,
-            areaName: cls.target ? (roomIdx.get(tgt)?.areaName || '') : '' });
-        }
       }
-      // 'custom' / 'suppressed' -> custom-lines pass below; 'udio' / 'crossZ' / 'skip' -> nothing
+      // 'cross' / 'custom' / 'suppressed' -> crossExitEntries / custom-lines pass below;
+      // 'udio' / 'crossZ' / 'skip' -> nothing
     }
-    // cross-area SPECIAL exits (Studio 8523-8540)
-    for (const sc of RM.specialCrossArrows(room, plane, colorCache, cellPx)) {
-      drawArrow(sc.op);
-      crossArrows.push({ op: sc.op, targetId: sc.targetId, target: sc.target,
-        areaName: roomIdx.get(sc.targetId)?.areaName || '' });
+    // Studio drawExits: EVERY cross-area exit (regular + special) is collected,
+    // even when a custom line owns the direction — the arrow is skipped but the
+    // area label and the dblclick hit-test still apply (crossExitEntries)
+    for (const ce of RM.crossExitEntries(room, plane, colorCache, cellPx)) {
+      if (ce.op) drawArrow(ce.op);
+      crossArrows.push({ op: ce.op, edge: ce.edge, anchor: ce.anchor, svec: ce.svec,
+        targetId: ce.targetId, target: ce.target,
+        areaName: ce.target ? (roomIdx.get(ce.targetId)?.areaName || '') : '' });
     }
     // stubs from DATA (Studio drawStubs)
     for (const st of RM.stubOps(room, cellPx)) {
@@ -766,7 +762,7 @@ cv.addEventListener('dblclick', e => {
   const wy = (sy - H / 2 - view.y) / view.scale;
   let best = null, bestD = Infinity;
   for (const a of _lastCrossArrows) {
-    if (a.targetId == null || a.smx === undefined) continue;
+    if (!a.target || a.smx === undefined) continue;   // Studio: !target -> no jump
     const d = Math.hypot(sx - a.smx, sy - a.smy);
     if (d < (a.hitR || 15) && d < bestD) { bestD = d; best = a; }
   }

@@ -19,7 +19,7 @@ const ORDER = [
   'mudlet-dat.js', 'validate.js', 'checksum.js', 'stable-stringify.js',
   'canonicalize.js', 'dat-to-arkmap.js', 'arkmap-to-dat.js',
   'suppressors.js', 'transports.js', 'arkmap.js', 'graph.js', 'waypoints.js',
-  'locale.js', 'diff.js', 'search-index.js', 'render-svg.js', 'render-png.js',
+  'locale.js', 'diff.js', 'search-index.js', 'render-model.js', 'render-svg.js', 'render-png.js',
 ];
 
 const FOOTER = `
@@ -38,6 +38,15 @@ globalThis.arkmap = {
   diffMaps,
   buildSearchIndex, searchIndexed,
   renderSvg, svgToPng, renderPng,
+  RENDER_MODEL: {
+    CELL, ROOM_UNITS, ROOM_HALF, DEFAULT_ROOM_RGB, LINE_CSS, ONE_WAY_FILL,
+    CROSS_UNKNOWN_CSS, CL_DEFAULT_CSS, DOOR_CSS, HIDDEN_FADE, RASTER_LINE_ALPHA,
+    LOD_MIN_CELL_PX, LOD_ROOMS_BUDGET, LOD_RASTER_CELL_PX, DIR_VEC, OPP_DIR, UDIO_DIRS,
+    buildColorCache, roomColorCss, roomColorRgb, isRoomHidden, hiddenRoomStyle,
+    contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits,
+    exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp,
+    roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel,
+  },
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,
   DIRS, DIR_BY_SHORT, DIR_BY_LONG, DIR_BY_IDX, DOOR_INT, DOOR_STR, LINE_INT, LINE_STR,

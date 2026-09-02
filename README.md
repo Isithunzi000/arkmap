@@ -11,11 +11,11 @@ deterministic serialization, and content-integrity checksums (XXH3-64, `v4`).
 Zero dependencies. ESM only. Node ≥ 18 and modern browsers.
 
 ```
-npm install arkmap
+npm install arkmap-js
 ```
 
 ```js
-import { loadArkmap, saveArkmap, datToArkmap, arkmapToDat, validate } from 'arkmap';
+import { loadArkmap, saveArkmap, datToArkmap, arkmapToDat, validate } from 'arkmap-js';
 
 // .arkmap (text/JSON)
 const { map, validation, checksums } = loadArkmap(fileText);
@@ -153,7 +153,7 @@ Game-specific data for the Arkadia MUD is available under the `arkmap/arkadia`
 subpath — kept out of the universal root API:
 
 ```js
-import { ARKADIA_ENVS, ARKADIA_SYMBOLS, envPaletteList, isArkadiaMap } from 'arkmap/arkadia';
+import { ARKADIA_ENVS, ARKADIA_SYMBOLS, envPaletteList, isArkadiaMap } from 'arkmap-js/arkadia';
 ```
 
 #### Graph & routing
@@ -178,7 +178,7 @@ otherwise the step costs `max(targetRoom.weight, 1)` (default 1).
 | `searchRooms(query, map, limit = 25)` | digits or `#id` → exact id match; otherwise case-insensitive substring on `room.name` (region is the name suffix, so region search works); map order, cut at `limit` |
 
 ```js
-import { buildIndex, findRoute, searchRooms } from 'arkmap/graph';
+import { buildIndex, findRoute, searchRooms } from 'arkmap-js/graph';
 
 const idx = buildIndex(map);
 const hit = searchRooms('karczma', map)[0];
@@ -239,8 +239,8 @@ Available from the root and under the `arkmap/transports` subpath. Arkadia's
 own transport lines ship as data under `arkmap/arkadia/transports`:
 
 ```js
-import { ARKADIA_TRANSPORTS } from 'arkmap/arkadia/transports';
-import { buildIndex, findRoute } from 'arkmap';
+import { ARKADIA_TRANSPORTS } from 'arkmap-js/arkadia/transports';
+import { buildIndex, findRoute } from 'arkmap-js';
 
 const idx = buildIndex(map);
 const route = findRoute(a, b, idx, { transportMode: 'normal', transports: ARKADIA_TRANSPORTS });
@@ -277,7 +277,7 @@ subpath.
 | `decodeRoute(code, hasRoom?)` | → `{ ids, valid, invalidCount, total, algorithm, dirMode, transportMode }`; `null` on structural corruption; `{ error: 'crc', expected, actual }` on checksum mismatch; `{ error: 'too-many', max, total }` over the waypoint limit. `hasRoom(id)` (e.g. `id => idx.has(id)`) splits ids into `valid` / `invalidCount` |
 
 ```js
-import { encodeRoute, decodeRoute } from 'arkmap/waypoints';
+import { encodeRoute, decodeRoute } from 'arkmap-js/waypoints';
 
 const code = encodeRoute([729, 3760, 10313], { algorithm: 'astar', dirMode: 'all', transportMode: 'normal' });
 // 'arkmap:awn:729,3760,10313:…' — paste-safe, shareable
@@ -301,7 +301,7 @@ to ArkMap Studio's history panel — see [Internationalization](#internationaliz
 any MUD. Available from the root and under the `arkmap/diff` subpath.
 
 ```js
-import { diffMaps } from 'arkmap/diff';
+import { diffMaps } from 'arkmap-js/diff';
 
 const { entries, stats, overlap, srcRooms, dstRooms } = diffMaps(oldMap, newMap);
 // entries — ordered, deterministic ops; each carries a human-readable `label`
@@ -349,7 +349,7 @@ Constants: `ARKDELTA_FORMAT` (`'arkdelta'`) · `ARKDELTA_FORMAT_VERSION` (`3`) �
 `ARKDELTA_MAX_OPS` (`5000`) · `ARKDELTA_MAX_BYTES` (8 MiB).
 
 ```js
-import { validateDeltaText, verifyDeltaSignature } from 'arkmap/delta-validate';
+import { validateDeltaText, verifyDeltaSignature } from 'arkmap-js/delta-validate';
 
 const res = validateDeltaText(text);            // English messages
 const resPl = validateDeltaText(text, { locale: 'pl' }); // Studio-pinned Polish
@@ -388,7 +388,7 @@ tie-breaks, cut at `limit`. Universal — any arkmap-shaped map, any MUD.
 Available from the root and under the `arkmap/search-index` subpath.
 
 ```js
-import { buildSearchIndex, searchIndexed } from 'arkmap/search-index';
+import { buildSearchIndex, searchIndexed } from 'arkmap-js/search-index';
 
 const idx = buildSearchIndex(map);            // build once, query many times
 searchIndexed(idx, 'karczma smok');           // multi-word: intersect, cumulative score
@@ -419,8 +419,8 @@ included) plus `pngScale` (default 2). PNG output therefore carries exactly
 what the SVG would. Same module, same browser-only rule.
 
 ```js
-import { renderSvg } from 'arkmap/render-svg';
-import { svgToPng, renderPng } from 'arkmap/render-png';
+import { renderSvg } from 'arkmap-js/render-svg';
+import { svgToPng, renderPng } from 'arkmap-js/render-png';
 
 const svg = renderSvg(map, {
   areaId: 'all', z: null,

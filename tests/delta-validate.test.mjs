@@ -208,3 +208,25 @@ test('computeBaseInfo: crc + version/revision + per-area sums', () => {
   assert.deepEqual(computeBaseInfo(map, map.checksums && { file: map.checksums.file, areas: map.checksums.areas }), info);
   assert.equal(computeBaseInfo(null), null);
 });
+
+
+test('undefined params render like Studio template literals (regression: BUGFIX-1)', () => {
+  // op without .type -> OP_UNKNOWN_TYPE with type=undefined
+  const op = { seq: 1, type: 'DELETE_ROOM', target: { roomId: 5 }, payload: {} };
+  const mk = (mut) => {
+    const d = { format: ARKDELTA_FORMAT, format_version: ARKDELTA_FORMAT_VERSION, meta: { ops_count: 1 }, ops: [JSON.parse(JSON.stringify(op))] };
+    mut(d);
+    d.checksums = deltaChecksums(d.meta, d.ops);
+    return JSON.stringify(d);
+  };
+  // PL byte-pins verified against Studio v1.52.6 validateDeltaText
+  const r1 = validateDeltaText(mk(d => { delete d.ops[0].type; }), { locale: 'pl' });
+  assert.equal(r1.ok, false);
+  assert.equal(r1.errors[0], 'operacja #1: nieznany typ operacji "undefined". Plik nie został wczytany.');
+  assert.deepEqual(r1.codes, ['OP_UNKNOWN_TYPE']);
+  const r2 = validateDeltaText(mk(d => { delete d.meta.ops_count; }), { locale: 'pl' });
+  assert.equal(r2.errors[0], 'Plik uszkodzony — liczba operacji w nagłówku (undefined) nie zgadza się z zawartością (1).');
+  // EN path renders the same way
+  const r3 = validateDeltaText(mk(d => { delete d.meta.ops_count; }));
+  assert.equal(r3.errors[0], 'File corrupted — operation count in the header (undefined) does not match the content (1).');
+});

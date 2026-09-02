@@ -26,6 +26,11 @@ test('translate: EN default, PL on request, params stringified', () => {
 test('translate: missing param left as placeholder, no params → raw template', () => {
   assert.equal(translate('diff.delExit', { dir: 'n' }), 'Delete exit n from #{id}');
   assert.equal(translate('diff.editExits'), 'Edit exits in room "{name}" (#{id})');
+  // template-literal semantics (Studio parity): a key present with value
+  // undefined renders as "undefined"; only an absent key keeps {placeholder}
+  assert.equal(translate('dval.OPS_COUNT_MISMATCH', { declared: undefined, actual: 3 }),
+    'File corrupted — operation count in the header (undefined) does not match the content (3).');
+  assert.equal(translate('diff.delExit', { dir: undefined }), 'Delete exit undefined from #{id}');
 });
 
 test('translate: unknown key throws; plural-form key rejected as message', () => {

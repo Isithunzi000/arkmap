@@ -5191,6 +5191,10 @@ function decodeRoute(code, hasRoom) {
 // it adopts this package. One deliberate deviation: 'diff.paintBatch' uses
 // the grammatically correct 2–4 form "pokoje" — Studio prints "pokoi" for
 // every n > 1 (grammar bug, fixed here on purpose).
+// Parameter substitution mirrors JS template-literal semantics (Studio builds
+// messages with those): a key present with value `undefined` renders as
+// "undefined" (e.g. a malformed delta without meta.ops_count); only a key
+// absent from params keeps its {placeholder}.
 
 const en = {
   // diffMaps op labels (undo-history style)
@@ -5479,7 +5483,7 @@ function translate(key, params, locale) {
   if (val === undefined) throw new Error('arkmap: unknown message key: ' + key);
   if (typeof val !== 'string') throw new Error('arkmap: not a message key: ' + key);
   if (!params) return val;
-  return val.replace(/\{(\w+)\}/g, (m, k) => (params[k] !== undefined ? String(params[k]) : m));
+  return val.replace(/\{(\w+)\}/g, (m, k) => (Object.hasOwn(params, k) ? String(params[k]) : m));
 }
 
 // plural(locale, n, formsKey) → word form for n, per locale rules.

@@ -46,11 +46,11 @@ Drag & drop a `.dat` / `.arkmap` file (or pass `?src=<url>`) and you get:
   cross-area exit) to jump straight to that area and room,
 - map labels from the file (styled text and original Mudlet pixmaps),
   rendered under/above the rooms exactly as stored,
-- multi-waypoint route planning on `arkmap/graph` (Dijkstra/A*, direction
+- multi-waypoint route planning on `arkmap-js/graph` (Dijkstra/A*, direction
   filters, transport modes) with a schematic route overview, fit-route and
   gen-3 `arkmap:` route codes (live export / paste import) via
-  `arkmap/waypoints`,
-- true-vector SVG / PNG export of the current view via `arkmap/render-svg`,
+  `arkmap-js/waypoints`,
+- true-vector SVG / PNG export of the current view via `arkmap-js/render-svg`,
   with a native save-as dialog (typed filename) where the browser supports
   it — arrows and map labels included.
 
@@ -149,7 +149,7 @@ lossless.
 
 #### Arkadia layer
 
-Game-specific data for the Arkadia MUD is available under the `arkmap/arkadia`
+Game-specific data for the Arkadia MUD is available under the `arkmap-js/arkadia`
 subpath — kept out of the universal root API:
 
 ```js
@@ -160,7 +160,7 @@ import { ARKADIA_ENVS, ARKADIA_SYMBOLS, envPaletteList, isArkadiaMap } from 'ark
 
 Room graph over a map: indexing, adjacency, weighted routing (Dijkstra / A*),
 direction filters, locked exits, transport hops, multi-waypoint planning and
-room search. Available from the root and under the `arkmap/graph` subpath.
+room search. Available from the root and under the `arkmap-js/graph` subpath.
 Pure and stateless — same input, same output.
 
 Edge weight semantics follow Mudlet: a positive `exit_weights[dir]` wins;
@@ -235,8 +235,8 @@ reported separately from map-data sums (auxiliary routing data, same class as
 | `verifyTransportChecksums(map)` | verify → `{ present, ok, unsigned?, hashOk, badLines[], missingLines[], extraLines[] }`; never throws |
 | `buildTransportEdges(doc, idx, { mode })` | virtual edges for the router: `Map(roomId → [{ to, cost, hop }])`; chains stop at rooms missing from the map |
 
-Available from the root and under the `arkmap/transports` subpath. Arkadia's
-own transport lines ship as data under `arkmap/arkadia/transports`:
+Available from the root and under the `arkmap-js/transports` subpath. Arkadia's
+own transport lines ship as data under `arkmap-js/arkadia/transports`:
 
 ```js
 import { ARKADIA_TRANSPORTS } from 'arkmap-js/arkadia/transports';
@@ -268,7 +268,7 @@ xxh3-64 over the lowercased `arkmap:<flags>:<ids>` core — catches accidental
 damage when a code is pasted around (typos, truncation, mangled characters);
 it is an integrity check, not a security feature. Older code generations
 (`ARKMAP:`/`ARKMAP2:`, base64 payloads) are rejected by design — no backward
-compatibility. Available from the root and under the `arkmap/waypoints`
+compatibility. Available from the root and under the `arkmap-js/waypoints`
 subpath.
 
 | function | description |
@@ -298,7 +298,7 @@ breaks references (e.g. rooms are added before exits can point at them, areas
 are deleted last). Each op carries a human-readable `label`
 (English by default; pass `{ locale: 'pl' }` for Polish labels byte-identical
 to ArkMap Studio's history panel — see [Internationalization](#internationalization)). Universal — works on any arkmap-shaped maps,
-any MUD. Available from the root and under the `arkmap/diff` subpath.
+any MUD. Available from the root and under the `arkmap-js/diff` subpath.
 
 ```js
 import { diffMaps } from 'arkmap-js/diff';
@@ -329,9 +329,9 @@ checksums and optional Ed25519 author signatures
 ([format specification — rendered](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkdelta_spec.html)
 · [specification source](https://github.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/blob/main/docs/arkdelta_spec.html)). The package ships the
 **reader** (fail-closed validation, signature verification, base identity —
-`arkmap/delta-validate`), the **writer** (delta build, deterministic
-compaction, op serialization — `arkmap/delta-build`) and **apply**
-(pure in-place application with Studio semantics — `arkmap/delta-apply`).
+`arkmap-js/delta-validate`), the **writer** (delta build, deterministic
+compaction, op serialization — `arkmap-js/delta-build`) and **apply**
+(pure in-place application with Studio semantics — `arkmap-js/delta-apply`).
 All three are also exported from the root.
 
 | function | description |
@@ -385,7 +385,7 @@ parity with ArkMap Studio's planner search: each query word found in the room
 name = 2 points, in the area name = 1 point, a room whose id equals the
 numeric query = 999; results sort by score desc with stable map-order
 tie-breaks, cut at `limit`. Universal — any arkmap-shaped map, any MUD.
-Available from the root and under the `arkmap/search-index` subpath.
+Available from the root and under the `arkmap-js/search-index` subpath.
 
 ```js
 import { buildSearchIndex, searchIndexed } from 'arkmap-js/search-index';
@@ -406,12 +406,12 @@ labels (`mapLabels: true` — styled text and pixmap images from `area.labels`,
 honouring `show_on_top` and the `z` filter), route overlays (walking segments
 solid, transport hops dashed) and waypoint markers. Fully deterministic: same
 input, byte-identical SVG. Available from the root and under the
-`arkmap/render-svg` subpath.
+`arkmap-js/render-svg` subpath.
 
 `svgToPng(svg, { scale = 2 })` rasterizes such a self-contained SVG to a PNG
 `Blob` in the **browser** (Blob URL → `<img>` → canvas → `toBlob`; the canvas
 stays untainted because the SVG has no external references). Available from
-the root and under the `arkmap/render-png` subpath.
+the root and under the `arkmap-js/render-png` subpath.
 
 `renderPng(map, opts)` is the one-call convenience — `renderSvg(map, opts)` +
 `svgToPng` with the same options (everything above, arrows and map labels

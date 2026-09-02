@@ -1,7 +1,7 @@
 {
   "name": "arkmap",
   "version": "1.0.0",
-  "description": "Mudlet map toolkit for the web: read/write .dat and .arkmap, validate, verify checksums, convert both ways. Zero dependencies.",
+  "description": "Mudlet map toolkit for Node.js and the browser: read/write .dat and .arkmap maps, validate, XXH3-64 checksums, map diff, .arkdelta edit deltas (validate/build/apply, Ed25519 signature verification), routing, transports, waypoint route codes, token-indexed search, SVG/PNG rendering. Zero dependencies, ESM, EN/PL.",
   "author": "Isithunzi000",
   "license": "MIT",
   "type": "module",
@@ -48,6 +48,8 @@
     "map",
     "arkmap",
     "dat",
-    "mapper"
+    "mapper",
+    "arkdelta",
+    "mudlet-map"
   ]
 }

@@ -325,7 +325,9 @@ Semantics worth knowing:
 
 `.arkdelta` is the edit-delta format of ArkMap Studio: an ordered op log
 (25 op types) cut against a base map, with canonical XXH3-64 integrity
-checksums and optional Ed25519 author signatures. The package ships the
+checksums and optional Ed25519 author signatures
+([format specification — rendered](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkdelta_spec.html)
+· [specification source](https://github.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/blob/main/docs/arkdelta_spec.html)). The package ships the
 **reader** (fail-closed validation, signature verification, base identity —
 `arkmap/delta-validate`), the **writer** (delta build, deterministic
 compaction, op serialization — `arkmap/delta-build`) and **apply**
@@ -441,6 +443,14 @@ verification against an external oracle, deterministic-save guarantees and the
 graph suite (pathfinding/search properties on golden fixtures and synthetic
 edge cases) all run in CI on Node 18/20/22.
 
+The `.arkdelta` engine (reader, writer, apply) is additionally verified
+against the ArkMap Studio original used as an oracle: byte-identical
+validation messages (EN/PL), byte-identical built deltas, byte-identical
+applied maps across hand-written scenarios covering all 25 op types, plus
+seeded differential fuzzing (random maps, random op logs, mutated delta
+files) and a permutation battery over Studio-produced real files (maps in
+both formats and signed deltas, apply matrix across base/target formats).
+
 The Arkadia map data originates from the community crowd-mapping project at
 [Delwing/arkadia-mapa](https://github.com/Delwing/arkadia-mapa).
 
@@ -465,6 +475,10 @@ English. Polish is available for **user-facing output** via message catalogs
   error shape is `{ path, code, msg }`: `code` is a stable machine-readable
   identifier (e.g. `INVALID_DIRECTION`, `TARGET_NOT_FOUND`) independent of the
   locale, `msg` is the localized rendering.
+- **`.arkdelta` validation and apply** (`validateDeltaText`, `applyDelta`) —
+  `errors` / skip `reason`s follow `opts.locale`; Polish messages are
+  byte-pinned to ArkMap Studio. Machine `codes` (`CHECKSUM_MISMATCH`,
+  `ROOM_MISSING`, …) are locale-independent.
 - **`.dat` import errors** (`datToArkmap`, `readMudletDat`) always throw
   English messages with a machine `code` property (`DAT_TRUNCATED`,
   `DAT_NEGATIVE_COUNT`, `DAT_UNSUPPORTED_VERSION`) — parser errors are

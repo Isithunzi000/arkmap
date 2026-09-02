@@ -69,6 +69,10 @@ export {
 // op serialization (labels copied from log entries — localize at production)
 export { buildDelta, serializeDeltaOps, DELTA_EXPORTABLE } from './delta-build.js';
 
+// .arkdelta apply: pure in-place application with Studio semantics —
+// mutates the map, never the delta; returns { applied, appliedSeqs, skipped }
+export { applyDelta } from './delta-apply.js';
+
 // token-indexed room search (scoring parity with ArkMap Studio planner search)
 export { buildSearchIndex, searchIndexed } from './search-index.js';
 

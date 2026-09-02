@@ -20,7 +20,8 @@
     "./render-png": "./src/render-png.js",
     "./package.json": "./package.json",
     "./delta-validate": "./src/delta-validate.js",
-    "./delta-build": "./src/delta-build.js"
+    "./delta-build": "./src/delta-build.js",
+    "./delta-apply": "./src/delta-apply.js"
   },
   "files": [
     "src/",

@@ -77,6 +77,8 @@ const BLOCKS = [
     note: '.arkdelta reader (H1): validator + schema + sid machinery + checksums from the ARKDELTA block, signature verify from the identity block (20317-20337) with the Ed25519 fallback (20126-20218, verify-only subset). Divergences: i18n via locale.js (EN default, PL byte-pinned to Studio), parallel codes array, VALID_DIRS derived from constants.js' },
   { out: 'delta-build.js',     from: 21007, to: 22029, status: 'maintained',
     note: '.arkdelta writer (H2): _deltaStripRoom, _deltaOpRefs/_deltaChainKey/_deltaTryFold, _compactDeltaOps, buildDelta, DELTA_EXPORTABLE, _deltaSerializeOps from the ARKDELTA block. Divergences: log/base as explicit params (Studio uses global state), meta.app_version via opts.appVersion (field omitted when not given), file-save glue and signing stay in Studio' },
+  { out: 'delta-apply.js',     from: 23302, to: 23606, status: 'maintained',
+    note: '.arkdelta apply (H3): applyDelta (23302-23606) plus the data semantics of its commit layer (_replaceRoomData 15322-15331, _dispatchRedo 15650-15952, deleteRoom 18130-18223, commitDeleteArea 18290-18406, commitAddExit/commitDeleteExit 18591-18650, commitMoveRoom 18697-18709, sid ref slots 22136-22181, helpers 22375-22380 + 23275-23295). Divergences: map as explicit param with internal indexes (Studio uses global state), no undo/redraw/toasts, editMode guard conceptually always on, skip reasons via locale.js (EN default, PL byte-pinned to Studio) with stable code per skip' },
 ];
 
 // --- logic normalization ----------------------------------------------------

@@ -116,6 +116,15 @@
       ],
       "sha256": "ec3f5d4c48c260e2ee964578065831fbc980462124614ac5546ec8a2be31e977",
       "note": ".arkdelta writer (H2): _deltaStripRoom, _deltaOpRefs/_deltaChainKey/_deltaTryFold, _compactDeltaOps, buildDelta, DELTA_EXPORTABLE, _deltaSerializeOps from the ARKDELTA block. Divergences: log/base as explicit params (Studio uses global state), meta.app_version via opts.appVersion (field omitted when not given), file-save glue and signing stay in Studio"
+    },
+    "src/delta-apply.js": {
+      "status": "maintained",
+      "lines": [
+        23302,
+        23606
+      ],
+      "sha256": "bd5fdfc8489c432b11f42efd9038fae5eb3986287422a9c230654e7cbaf6c796",
+      "note": ".arkdelta apply (H3): applyDelta (23302-23606) plus the data semantics of its commit layer (_replaceRoomData 15322-15331, _dispatchRedo 15650-15952, deleteRoom 18130-18223, commitDeleteArea 18290-18406, commitAddExit/commitDeleteExit 18591-18650, commitMoveRoom 18697-18709, sid ref slots 22136-22181, helpers 22375-22380 + 23275-23295). Divergences: map as explicit param with internal indexes (Studio uses global state), no undo/redraw/toasts, editMode guard conceptually always on, skip reasons via locale.js (EN default, PL byte-pinned to Studio) with stable code per skip"
     }
   }
 }

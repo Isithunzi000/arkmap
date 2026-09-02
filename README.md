@@ -327,9 +327,10 @@ Semantics worth knowing:
 (25 op types) cut against a base map, with canonical XXH3-64 integrity
 checksums and optional Ed25519 author signatures. The package ships the
 **reader** (fail-closed validation, signature verification, base identity —
-`arkmap/delta-validate`) and the **writer** (delta build, deterministic
-compaction, op serialization — `arkmap/delta-build`). Both are also exported
-from the root.
+`arkmap/delta-validate`), the **writer** (delta build, deterministic
+compaction, op serialization — `arkmap/delta-build`) and **apply**
+(pure in-place application with Studio semantics — `arkmap/delta-apply`).
+All three are also exported from the root.
 
 | function | description |
 |---|---|
@@ -340,6 +341,7 @@ from the root.
 | `buildDelta(log, base, opts?)` | op log (the shape `diffMaps` returns) → `.arkdelta` file text; sid `d:N` allocation, compaction, checksums |
 | `serializeDeltaOps(ops, base, opts?)` | ready ops → `.arkdelta` file text (fresh meta + checksums) |
 | `DELTA_EXPORTABLE` | the 25 op types a delta can carry |
+| `applyDelta(map, delta, opts?)` | applies a validated delta to a map **in place** → `{ applied, appliedSeqs, skipped[] }`; the delta is never mutated; per-op isolation — a failing op is skipped with a reason (`opts.locale`, EN default, PL byte-pinned to Studio) and a stable `code`, the rest still applies; `opts.onlySeq` applies only the given seqs, `opts.overrides` (seq → `{ x, y }`) re-validated fallback positions, `opts.seedSids` pre-resolved `d:N` ids |
 
 Constants: `ARKDELTA_FORMAT` (`'arkdelta'`) · `ARKDELTA_FORMAT_VERSION` (`3`) ·
 `ARKDELTA_MAX_OPS` (`5000`) · `ARKDELTA_MAX_BYTES` (8 MiB).
@@ -366,7 +368,11 @@ Compaction (spec §8) folds redundant chains (edit→edit, add→edit, add→del
 paint merges) without changing the applied result. Op labels are copied from
 the log entries — produce them with `diffMaps(a, b, { locale: 'pl' })` for a
 Polish delta. The round trip is closed: `validateDeltaText(buildDelta(log, base))`
-always validates.
+always validates, and `applyDelta` executes a validated delta with
+Studio-exact op semantics (exit guards refuse without mutation, room/area
+deletes cascade, `room.area` backlinks are maintained like Studio's live
+model). Apply is deterministic: same map, delta and options → same result
+and same report.
 
 #### Token-indexed room search
 

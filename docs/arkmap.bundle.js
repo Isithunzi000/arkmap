@@ -5304,6 +5304,28 @@ const en = {
   'dval.field.toZ':      'new level',  'dval.field.toW': 'new width',
   'dval.field.toH':      'new height', 'dval.field.toAreaId': 'target area',
   'dval.field.added':    'added entries', 'dval.field.removed': 'removed entries',
+  // applyDelta skip reasons — delta-apply.js ({ seq, reason, code }:
+  // reason follows opts.locale, code is stable/machine-readable).
+  // PL catalog below is byte-pinned to ArkMap Studio's apply wording.
+  'dapply.SID_LEFTOVER':        'reference to a delta object that does not exist ({sid})',
+  'dapply.OVERRIDE_OCCUPIED':   'fallback position occupied',
+  'dapply.AREA_MISSING':        'area does not exist',
+  'dapply.CELL_OCCUPIED':       'target cell occupied',
+  'dapply.ROOM_MISSING':        'room does not exist',
+  'dapply.NO_ROOM_EXISTS':      'no room exists',
+  'dapply.ALREADY_THERE':       'room is already at this position',
+  'dapply.TARGET_AREA_MISSING': 'target area does not exist',
+  'dapply.ALREADY_IN_AREA':     'room is already in this area',
+  'dapply.SRC_OR_TGT_MISSING':  'source or target room does not exist',
+  'dapply.DIR_OCCUPIED':        'direction occupied (guard)',
+  'dapply.EXIT_MISSING':        'exit does not exist',
+  'dapply.SPECIAL_EXIT_MISSING': 'special exit does not exist',
+  'dapply.DEFAULT_AREA':        'default area — deletion forbidden',
+  'dapply.CL_MISSING':          'custom line does not exist',
+  'dapply.ROOMS_MISSING':       'rooms do not exist',
+  'dapply.LABEL_MISSING':       'label does not exist',
+  'dapply.UNKNOWN_TYPE':        'unknown type',
+  'dapply.EXEC_ERROR':          'execution error: {msg}',
 };
 
 const pl = {
@@ -5416,6 +5438,26 @@ const pl = {
   'dval.field.toZ':      'nowy poziom',   'dval.field.toW': 'nowa szerokość',
   'dval.field.toH':      'nowa wysokość', 'dval.field.toAreaId': 'docelowy obszar',
   'dval.field.added':    'dodane wpisy',  'dval.field.removed': 'usunięte wpisy',
+  // applyDelta skip reasons — byte-pinned to ArkMap Studio's apply wording.
+  'dapply.SID_LEFTOVER':        'odwołanie do obiektu kalki, który nie istnieje ({sid})',
+  'dapply.OVERRIDE_OCCUPIED':   'pozycja zastępcza zajęta',
+  'dapply.AREA_MISSING':        'obszar nie istnieje',
+  'dapply.CELL_OCCUPIED':       'komórka docelowa zajęta',
+  'dapply.ROOM_MISSING':        'pokój nie istnieje',
+  'dapply.NO_ROOM_EXISTS':      'żaden pokój nie istnieje',
+  'dapply.ALREADY_THERE':       'pokój już jest na tej pozycji',
+  'dapply.TARGET_AREA_MISSING': 'obszar docelowy nie istnieje',
+  'dapply.ALREADY_IN_AREA':     'pokój już jest w tym obszarze',
+  'dapply.SRC_OR_TGT_MISSING':  'pokój źródłowy lub docelowy nie istnieje',
+  'dapply.DIR_OCCUPIED':        'kierunek zajęty (guard)',
+  'dapply.EXIT_MISSING':        'wyjście nie istnieje',
+  'dapply.SPECIAL_EXIT_MISSING': 'wyjście specjalne nie istnieje',
+  'dapply.DEFAULT_AREA':        'obszar domyślny — usuwanie zabronione',
+  'dapply.CL_MISSING':          'custom line nie istnieje',
+  'dapply.ROOMS_MISSING':       'pokoje nie istnieją',
+  'dapply.LABEL_MISSING':       'etykieta nie istnieje',
+  'dapply.UNKNOWN_TYPE':        'nieznany typ',
+  'dapply.EXEC_ERROR':          'błąd wykonania: {msg}',
 };
 
 const LOCALES = { en, pl };

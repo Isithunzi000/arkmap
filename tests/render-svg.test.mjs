@@ -91,9 +91,9 @@ test('custom lines: polyline from room center, Studio dash styles; suppressor hi
 
 test('doors: DOOR_RGB square at the exit midpoint (normal and custom lines)', () => {
   const map = { areas: [{ id: 1, rooms: [
-    { id: 1, x: 0, y: 0, z: 0, env: 1, exits: { e: 2 }, doors: { e: 2 } },
+    { id: 1, x: 0, y: 0, z: 0, env: 1, exits: { e: 2 }, doors: { e: 'closed' } },
     { id: 2, x: 2, y: 0, z: 0, env: 1, exits: { w: 1 } },
-    { id: 3, x: 0, y: 3, z: 0, env: 1, exits: { s: 4 }, doors: { s: 1 }, custom_lines: { s: { points: [[0, 2]] } } },
+    { id: 3, x: 0, y: 3, z: 0, env: 1, exits: { s: 4 }, doors: { s: 'open' }, custom_lines: { s: { points: [[0, 2]] } } },
     { id: 4, x: 0, y: 5, z: 0, env: 1 },
   ] }] };
   const svg = renderSvg(map, { areaId: 1, z: 0 });

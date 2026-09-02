@@ -6057,10 +6057,10 @@ const LINE_CSS = 'rgb(225,225,225)';
 const ONE_WAY_FILL = 'rgb(155,10,10)';
 const CROSS_UNKNOWN_CSS = '#ff9f4a';
 const CL_DEFAULT_CSS = '#aaaaff';
-// Door states in map data are ints (1 open, 2 closed, 3 locked); string keys
-// accepted too. Colors mirror Studio DOOR_RGB.
+// Door states in map data are strings, exactly Studio DOOR_RGB (4263).
+// ANY other value (incl. Mudlet ints) falls back to locked, mirroring
+// Studio's `DOOR_RGB[v] || DOOR_RGB.locked`.
 const DOOR_CSS = {
-  1: 'rgb(10,155,10)', 2: 'rgb(226,205,59)', 3: 'rgb(155,10,10)',
   open: 'rgb(10,155,10)', closed: 'rgb(226,205,59)', locked: 'rgb(155,10,10)',
 };
 const HIDDEN_FADE = 0.35;                // Studio HIDDEN_ROOM_FADE
@@ -6548,10 +6548,13 @@ function specialCrossArrows(room, plane, cache, cellPx) {
     const target = plane.byId.get(targetId) || null;
     if (!target) continue;
     if (plane.areaOf.get(targetId) === plane.areaId) continue;
+    // Studio (8530-8532) applies the data-space vec to SCREEN coords as-is
+    // (cy already Y-flipped by wy), so the on-screen displacement is [dx, dy].
+    // crossArrowOp negates Y internally -> feed it [dx, -dy] to land on [dx, dy].
     const dx = target.x - room.x, dy = target.y - room.y;
     const len = Math.hypot(dx, dy);
     if (!len) continue;
-    const op = crossArrowOp(room, [dx / len, dy / len], target, cache, cellPx);
+    const op = crossArrowOp(room, [dx / len, -dy / len], target, cache, cellPx);
     if (op) out.push({ cmd, targetId, target, op });
   }
   return out;
@@ -6625,7 +6628,7 @@ function _renderDoorSq(op) {
 function _renderGlyph(op) {
   const anchor = op.anchor || 'middle';
   const baseline = op.baseline === 'top' ? 'text-before-edge' : 'central';
-  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="system-ui,sans-serif" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
+  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="monospace" font-weight="bold" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
 }
 
 // one area label: text (fg color, dark halo, font fitted to the box — the
@@ -6640,7 +6643,7 @@ function _renderMapLabel(lbl) {
     if (bright < 60) fg = [200, 200, 80];
     const ratio = Math.min(0.75, W / Math.max(lbl.text.length / 2, 1));
     const fs = Math.max(0.1, Math.min(ratio, Math.max(H * 0.9, 0.1)));
-    s += `<text x="${_renderFmt(x + W / 2)}" y="${_renderFmt(y + H / 2)}" font-size="${_renderFmt(fs)}" fill="rgb(${fg[0]},${fg[1]},${fg[2]})" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif" paint-order="stroke" stroke="rgba(0,0,0,0.85)" stroke-width="${_renderFmt(fs * 0.12)}">${_renderEsc(lbl.text)}</text>`;
+    s += `<text x="${_renderFmt(x + W / 2)}" y="${_renderFmt(y + H / 2)}" font-size="${_renderFmt(fs)}" fill="rgb(${fg[0]},${fg[1]},${fg[2]})" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" paint-order="stroke" stroke="rgba(0,0,0,0.85)" stroke-width="${_renderFmt(fs * 0.12)}">${_renderEsc(lbl.text)}</text>`;
   } else if (lbl.pixmap) {
     s += `<image x="${_renderFmt(x)}" y="${_renderFmt(y)}" width="${_renderFmt(W)}" height="${_renderFmt(H)}" href="data:image/png;base64,${lbl.pixmap}"/>`;
   }

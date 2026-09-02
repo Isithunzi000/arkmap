@@ -65,7 +65,7 @@ function _renderDoorSq(op) {
 function _renderGlyph(op) {
   const anchor = op.anchor || 'middle';
   const baseline = op.baseline === 'top' ? 'text-before-edge' : 'central';
-  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="system-ui,sans-serif" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
+  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="monospace" font-weight="bold" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
 }
 
 // one area label: text (fg color, dark halo, font fitted to the box — the
@@ -80,7 +80,7 @@ function _renderMapLabel(lbl) {
     if (bright < 60) fg = [200, 200, 80];
     const ratio = Math.min(0.75, W / Math.max(lbl.text.length / 2, 1));
     const fs = Math.max(0.1, Math.min(ratio, Math.max(H * 0.9, 0.1)));
-    s += `<text x="${_renderFmt(x + W / 2)}" y="${_renderFmt(y + H / 2)}" font-size="${_renderFmt(fs)}" fill="rgb(${fg[0]},${fg[1]},${fg[2]})" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif" paint-order="stroke" stroke="rgba(0,0,0,0.85)" stroke-width="${_renderFmt(fs * 0.12)}">${_renderEsc(lbl.text)}</text>`;
+    s += `<text x="${_renderFmt(x + W / 2)}" y="${_renderFmt(y + H / 2)}" font-size="${_renderFmt(fs)}" fill="rgb(${fg[0]},${fg[1]},${fg[2]})" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" paint-order="stroke" stroke="rgba(0,0,0,0.85)" stroke-width="${_renderFmt(fs * 0.12)}">${_renderEsc(lbl.text)}</text>`;
   } else if (lbl.pixmap) {
     s += `<image x="${_renderFmt(x)}" y="${_renderFmt(y)}" width="${_renderFmt(W)}" height="${_renderFmt(H)}" href="data:image/png;base64,${lbl.pixmap}"/>`;
   }

@@ -28,10 +28,10 @@ const LINE_CSS = 'rgb(225,225,225)';
 const ONE_WAY_FILL = 'rgb(155,10,10)';
 const CROSS_UNKNOWN_CSS = '#ff9f4a';
 const CL_DEFAULT_CSS = '#aaaaff';
-// Door states in map data are ints (1 open, 2 closed, 3 locked); string keys
-// accepted too. Colors mirror Studio DOOR_RGB.
+// Door states in map data are strings, exactly Studio DOOR_RGB (4263).
+// ANY other value (incl. Mudlet ints) falls back to locked, mirroring
+// Studio's `DOOR_RGB[v] || DOOR_RGB.locked`.
 const DOOR_CSS = {
-  1: 'rgb(10,155,10)', 2: 'rgb(226,205,59)', 3: 'rgb(155,10,10)',
   open: 'rgb(10,155,10)', closed: 'rgb(226,205,59)', locked: 'rgb(155,10,10)',
 };
 const HIDDEN_FADE = 0.35;                // Studio HIDDEN_ROOM_FADE
@@ -519,10 +519,13 @@ function specialCrossArrows(room, plane, cache, cellPx) {
     const target = plane.byId.get(targetId) || null;
     if (!target) continue;
     if (plane.areaOf.get(targetId) === plane.areaId) continue;
+    // Studio (8530-8532) applies the data-space vec to SCREEN coords as-is
+    // (cy already Y-flipped by wy), so the on-screen displacement is [dx, dy].
+    // crossArrowOp negates Y internally -> feed it [dx, -dy] to land on [dx, dy].
     const dx = target.x - room.x, dy = target.y - room.y;
     const len = Math.hypot(dx, dy);
     if (!len) continue;
-    const op = crossArrowOp(room, [dx / len, dy / len], target, cache, cellPx);
+    const op = crossArrowOp(room, [dx / len, -dy / len], target, cache, cellPx);
     if (op) out.push({ cmd, targetId, target, op });
   }
   return out;

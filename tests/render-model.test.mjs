@@ -197,17 +197,20 @@ test('customLineOp: door square on first segment, arrow when requested', () => {
   const op = customLineOp(r, 'e', { points: [[2, 0]], arrow: true }, Z1);
   assert.equal(op.door, null); // no door state on the exit
   assert.ok(op.arrow, 'arrow op present');
-  const r2 = R(1, 0, 0, { exits: { e: 2 }, doors: { e: 2 } });
+  const r2 = R(1, 0, 0, { exits: { e: 2 }, doors: { e: 'closed' } });
   const cl2 = customLineOp(r2, 'e', { points: [[2, 0]] }, Z1);
   // door state resolution is data-dependent; at minimum the op must not crash
   assert.ok(cl2.points.length === 2);
 });
 
-test('doorSquareOp: Studio DOOR_RGB colors, side = ROOM_UNITS/2', () => {
-  const open = doorSquareOp(1, 2, 1, Z1);
-  assert.equal(open.color, DOOR_CSS.open ?? DOOR_CSS[1] ?? open.color);
+test('doorSquareOp: Studio DOOR_RGB colors, side = ROOM_UNITS/2, int falls back to locked', () => {
+  const open = doorSquareOp(1, 2, 'open', Z1);
+  assert.equal(open.color, DOOR_CSS.open);
   assert.ok(Math.abs(open.side - ROOM_UNITS / 2) < 1e-9);
-  assert.notEqual(JSON.stringify(doorSquareOp(1, 2, 2, Z1).color), JSON.stringify(doorSquareOp(1, 2, 3, Z1).color));
+  assert.notEqual(doorSquareOp(1, 2, 'closed', Z1).color, doorSquareOp(1, 2, 'locked', Z1).color);
+  // Studio DOOR_RGB[v] || DOOR_RGB.locked — Mudlet ints and junk go locked-red
+  assert.equal(doorSquareOp(1, 2, 2, Z1).color, DOOR_CSS.locked);
+  assert.equal(doorSquareOp(1, 2, 'bogus', Z1).color, DOOR_CSS.locked);
 });
 
 // ─── rooms / symbols / gates ─────────────────────────────────────────────────

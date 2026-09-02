@@ -36,7 +36,7 @@
 // Keep this file bundler-friendly for scripts/build-demo.mjs:
 // plain function/const declarations, single-line imports, one-line export list.
 
-import { CELL, ROOM_UNITS, ROOM_HALF, DIR_VEC, buildColorCache, classifyExit, exitLineOp, crossArrowOp, stubOps, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle } from './render-model.js';
+import { CELL, ROOM_UNITS, ROOM_HALF, DIR_VEC, buildColorCache, classifyExit, exitLineOp, crossArrowOp, stubOps, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, stackShadowsOp, specialCrossArrows } from './render-model.js';
 
 const RENDER_PAD = 1;            // viewBox margin in map units
 const RENDER_CELL_PX = CELL;     // static export = Studio zoom 1 (all detail layers on)
@@ -63,7 +63,9 @@ function _renderDoorSq(op) {
   return `<rect x="${_renderFmt(op.cx - h)}" y="${_renderFmt(op.cy - h)}" width="${_renderFmt(op.side)}" height="${_renderFmt(op.side)}" fill="none" stroke="${op.color}" stroke-width="${_renderFmt(op.width)}"/>`;
 }
 function _renderGlyph(op) {
-  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
+  const anchor = op.anchor || 'middle';
+  const baseline = op.baseline === 'top' ? 'text-before-edge' : 'central';
+  return `<text x="${_renderFmt(op.x)}" y="${_renderFmt(op.y)}" font-size="${_renderFmt(op.fontUnits)}" fill="${op.fill}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="system-ui,sans-serif" paint-order="stroke" stroke="${op.halo}" stroke-width="${_renderFmt(op.haloWidth)}">${_renderEsc(op.text)}</text>`;
 }
 
 // one area label: text (fg color, dark halo, font fitted to the box — the
@@ -177,6 +179,7 @@ function renderSvg(mapObj, opts) {
           seenLines.add(key);
         }
         const op = exitLineOp(r, cls.target, DIR_VEC[dir], CPX, cls.kind === 'oneway');
+        cls._op = op;
         exitSvg.push(_renderLine(op));
         if (op.head) exitSvg.push(_renderHead(op.head, op.head.outline, op.width));
       } else if (cls.kind === 'cross') {
@@ -190,15 +193,19 @@ function renderSvg(mapObj, opts) {
       // 'custom' / 'suppressed' handled by the custom-lines layer;
       // 'udio' / 'crossZ' / 'skip' have no line geometry.
       const door = (r.doors || {})[dir];
-      if (door && (cls.kind === 'line' || cls.kind === 'oneway')) {
-        const [sx, sy] = pos.get(r.id);
-        const [tx, ty] = pos.get(tgt) || [sx, sy];
-        const dkey = `${_renderFmt((sx + tx) / 2)}|${_renderFmt((sy + ty) / 2)}|${door}`;
+      if (door && (cls.kind === 'line' || cls.kind === 'oneway') && cls._op) {
+        const [x1, y1, x2, y2] = cls._op.line;
+        const dkey = `${_renderFmt((x1 + x2) / 2)}|${_renderFmt((y1 + y2) / 2)}|${door}`;
         if (!seenDoors.has(dkey)) {
           seenDoors.add(dkey);
-          exitSvg.push(_renderDoorSq(doorSquareOp((sx + tx) / 2, (sy + ty) / 2, door, CPX)));
+          exitSvg.push(_renderDoorSq(doorSquareOp((x1 + x2) / 2, (y1 + y2) / 2, door, CPX)));
         }
       }
+    }
+    for (const sc of specialCrossArrows(r, plane, cache, CPX)) {
+      const name = areaNames.get(areaOf.get(sc.targetId)) || `area ${areaOf.get(sc.targetId)}`;
+      exitSvg.push(`<g><title>${_renderEsc(`${name} (#${sc.targetId})`)}</title>${_renderLine(sc.op)}`
+        + `<polygon points="${_renderPts(sc.op.head)}" fill="${sc.op.color}" stroke="none"/></g>`);
     }
     for (const st of stubOps(r, CPX)) stubSvg.push(_renderLine(st));
     for (const [dir, cl] of Object.entries(r.custom_lines || {})) {
@@ -214,8 +221,14 @@ function renderSvg(mapObj, opts) {
   if (stubSvg.length) out.push(`<g>${stubSvg.join('')}</g>`);
   if (clSvg.length) out.push(`<g>${clSvg.join('')}</g>`);
 
-  // rooms + per-room details (inner u/d/i/o triangles, symbol, ✦ marker)
+  // rooms + per-room details (stack shadows behind, inner u/d/i/o triangles,
+  // symbol, ✦ marker)
   const roomSvg = [];
+  for (const r of rooms) {
+    for (const sh of stackShadowsOp(r, CPX) || []) {
+      roomSvg.push(`<rect x="${_renderFmt(sh.x)}" y="${_renderFmt(sh.y)}" width="${_renderFmt(sh.size)}" height="${_renderFmt(sh.size)}" fill="none" stroke="${sh.color}" stroke-width="${_renderFmt(sh.width)}"/>`);
+    }
+  }
   for (const r of rooms) {
     const ro = roomOp(r, cache, CPX, 'faded');
     if (ro.skip) continue;

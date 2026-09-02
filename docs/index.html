@@ -173,6 +173,11 @@ let loadedMsg = 'no map loaded — drop a file anywhere', loadedCls = '';
 let ovGeom = null;                // schematic route-preview geometry (cache)
 let mmDirty = true, mmCache = null, mmXf = null, mmDrag = false;  // geographic minimap
 let lastFitScale = null;          // skala ostatniego fit — baza procentu na pasku zoomu
+let colorCache = null;            // RENDER_MODEL.buildColorCache(map) — rebuilt on load
+let modelById = new Map();        // roomId -> room (render model plane lookups)
+let modelAreaOf = new Map();      // roomId -> areaId
+let mapSeq = 0;                   // load counter — raster cache key
+let rasterCache = null;           // { key, canvas, minX, maxY, cols, rows }
 
 // waypoint marker colors (cycle) — shared by map rings, chips and the route overview
 const WP_COLORS = ['#00c896', '#4a90e8', '#e84a90', '#e8c84a', '#a04ae8'];
@@ -200,15 +205,12 @@ addEventListener('resize', resize);
 // uses stale dimensions and the view looks cropped
 if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => resize()).observe(cv.parentElement);
 
+// Studio color chain 1:1 via the shared render model (ANSI implicit with the
+// 8/16 Mudlet quirk < ARKADIA_ENVS < env_colors < custom_env_colors; unknown
+// env -> dark red DEFAULT_ROOM_RGB). The 2nd arg is kept for call-site compat.
 function envColor(env, colors) {
-  if (env == null) return '#3a4150';
-  const custom = colors?.custom_env_colors?.[env];
-  if (Array.isArray(custom)) return `rgb(${custom[0]},${custom[1]},${custom[2]})`;
-  const ansiIdx = colors?.env_colors?.[env];
-  if (ansiIdx != null && A.ANSI_PAL[ansiIdx]) { const c = A.ANSI_PAL[ansiIdx]; return `rgb(${c[0]},${c[1]},${c[2]})`; }
-  if (map && A.isArkadiaMap(map, null) && A.ARKADIA_ENVS[env]) { const c = A.ARKADIA_ENVS[env].rgb; return `rgb(${c[0]},${c[1]},${c[2]})`; }
-  const c = A.ansiPaletteRgb(env);
-  return c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#3a4150';
+  if (!colorCache) colorCache = A.RENDER_MODEL.buildColorCache(map);
+  return A.RENDER_MODEL.roomColorCss(colorCache, env);
 }
 
 function visible(room, areaId) {
@@ -227,24 +229,17 @@ function roomsInScope() {
   return out;
 }
 
-function glyphColor(room) {   // contrast against the room color (like symbolFillFor/contrastColor in ArkMap Studio)
-  const m = envColor(room.env, map?.colors).match(/\d+/g);
-  if (!m) return '#14171c';
-  const lum = 0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2];
-  return lum > 140 ? '#14171c' : '#f2f5fa';
-}
-
-// Delwing-style triangles INSIDE the room (same geometry as ArkMap Studio: R = rs/5, 1.4 x 0.8, +/-rs/4)
-function innerTri(x, y, px, py, rot, R) {
-  ctx.beginPath();
-  for (let i = 0; i < 3; i++) {
-    const a = (2 * Math.PI * i / 3) - Math.PI / 2;
-    const qx = Math.cos(a) * R * 1.4, qy = Math.sin(a) * R * 0.8;
-    const vx = px + qx * Math.cos(rot) - qy * Math.sin(rot);
-    const vy = py + qx * Math.sin(rot) + qy * Math.cos(rot);
-    i === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
-  }
-  ctx.closePath(); ctx.fill(); ctx.stroke();
+// glyph (symbol / special-exit marker) from a model op: font size in map
+// units — the canvas transform scales it to exactly op.fontUnits*view.scale px
+function drawGlyph(op) {
+  ctx.font = `${op.fontUnits}px system-ui, sans-serif`;
+  ctx.textAlign = op.anchor === 'end' ? 'right' : 'center';
+  ctx.textBaseline = op.baseline === 'top' ? 'top' : 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = op.haloWidth; ctx.strokeStyle = op.halo;
+  ctx.strokeText(op.text, op.x, op.y);
+  ctx.fillStyle = op.fill;
+  ctx.fillText(op.text, op.x, op.y);
 }
 
 // map labels (area.labels): text with fg color and outline, or the original
@@ -262,11 +257,7 @@ function drawMapLabels(top) {
       const ns = lbl.no_scaling ? 20 / view.scale : 1;   // 20 px/jednostke przy skali 1
       const W = (lbl.width ?? 4) * ns, H = (lbl.height ?? 1.2) * ns;
       const x = lbl.x ?? 0, y = -(lbl.y ?? 0);
-      const bgc = lbl.bg_color;
-      if (Array.isArray(bgc) && bgc.length >= 4 && bgc[3] > 0) {
-        ctx.fillStyle = `rgba(${bgc[0]},${bgc[1]},${bgc[2]},${bgc[3] / 255})`;
-        ctx.fillRect(x, y, W, H);
-      }
+      // Studio parity: no background rect behind labels (halo only)
       if (lbl.text) {
         let fg = Array.isArray(lbl.fg_color) ? lbl.fg_color : [200, 200, 100];
         const bright = (fg[0] * 299 + fg[1] * 587 + fg[2] * 114) / 1000;
@@ -294,50 +285,40 @@ function drawMapLabels(top) {
   }
 }
 
-// cross-area arrows + labels 1:1 as in ArkMap Studio (drawCrossAreaArrows +
-// drawCrossAreaLabels): drawn in screen pixels (after restore), not in map
-// units — line max(1, roomPx/18) px, length max(4, roomPx*0.9) px, head 0.35 room;
-// arrows hidden below a 4.5px room (Studio minZoom 0.25), labels below 9px
-// (Studio 0.5). Label: fixed 8-11px font, smart placement (3 positions, first
-// without room collisions), box with background, clipped into the viewport with a 2px margin.
+// cross-area exit LABELS 1:1 as in ArkMap Studio (drawCrossAreaLabels):
+// drawn in screen pixels (after restore); arrows themselves are drawn by the
+// render model in map space (drawExitsModel). Labels hidden below cellPx 9
+// (Studio zoom 0.5). Fixed 8-11px font, smart placement (3 positions, first
+// without room collisions), box with background, clipped into the viewport.
 function drawCrossArrowOverlay() {
   if (!map || !_lastCrossArrows.length) return;
+  const RM = A.RENDER_MODEL;
+  const cellPx = view.scale, zoom = cellPx / RM.CELL;
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
-  const roomPx = 0.72 * view.scale;                        // CELL*zoom w Studio (CELL=18)
-  if (roomPx < 4.5) return;                                // Studio: arrows hide when zoomed far out
   const toSX = (mx) => W / 2 + view.x + mx * view.scale;
   const toSY = (my) => H / 2 + view.y + my * view.scale;   // my already in screen coordinates
-  const tickLen = Math.max(4, roomPx * 0.9);
-  const lineW = Math.max(1, roomPx / 18);
-  const hw = Math.max(1.5, roomPx * 0.35);
+  const rsPx = Math.max(2, RM.ROOM_UNITS * cellPx);
+  const hw = Math.max(1.5, rsPx * 0.35);
   const vis = roomsInScope();
   for (const a of _lastCrossArrows) {
-    if (a.targetId == null) continue;
-    const ex = toSX(a.x1), ey = toSY(a.y1);
-    const ax = ex + a.ux * tickLen, ay = ey + a.uy * tickLen;
-    const col = envColor(a.env, map?.colors);
-    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lineW;
-    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ax, ay); ctx.stroke();
-    const pxv = -a.uy, pyv = a.ux;
-    ctx.beginPath();
-    ctx.moveTo(ax + a.ux * hw * 1.2, ay + a.uy * hw * 1.2);
-    ctx.lineTo(ax - a.ux * hw + pxv * hw * 0.8, ay - a.uy * hw + pyv * hw * 0.8);
-    ctx.lineTo(ax - a.ux * hw - pxv * hw * 0.8, ay - a.uy * hw - pyv * hw * 0.8);
-    ctx.closePath(); ctx.fill();
+    const ex = toSX(a.op.line[0]), ey = toSY(a.op.line[1]);
+    const ax = toSX(a.op.line[2]), ay = toSY(a.op.line[3]);
     a.smx = (ex + ax) / 2; a.smy = (ey + ay) / 2;          // hit-test dblclick (px ekranu)
-    a.hitR = Math.max(15, tickLen * 1.5);
+    a.hitR = Math.max(15, Math.hypot(ax - ex, ay - ey) * 1.5);
     a.stx = ax; a.sty = ay;                                // kotwica etykiety
+    const l = Math.hypot(a.op.line[2] - a.op.line[0], a.op.line[3] - a.op.line[1]) || 1;
+    a.ux = (a.op.line[2] - a.op.line[0]) / l; a.uy = (a.op.line[3] - a.op.line[1]) / l;
   }
-  if (roomPx < 9) return;                                  // Studio: etykiety od zoomu 0.5
-  const fontSize = Math.max(8, Math.min(11, roomPx * 8 / 18));
+  if (cellPx < RM.CELL * 0.5) return;                      // Studio: etykiety od zoomu 0.5
+  const fontSize = Math.max(8, Math.min(11, zoom * 8));
   const alongOff = hw * 2.0 + 6;
-  const perpOff = Math.max(roomPx * 1.2, 14);
-  const rh = roomPx * 0.55;
+  const perpOff = Math.max(rsPx * 1.2, 14);
+  const rh = rsPx * 0.55;
   ctx.font = `${fontSize}px sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   for (const a of _lastCrossArrows) {
-    if (a.targetId == null || !a.areaName || a.stx === undefined) continue;
-    const labelStr = a.areaName;
+    if (a.stx === undefined) continue;
+    const labelStr = a.areaName || (a.target ? String(a.targetId) : '?');
     const vx = a.ux, vy = a.uy;
     const tm = ctx.measureText(labelStr);
     const tw = tm.width + 6, th = fontSize + 4;
@@ -347,7 +328,7 @@ function drawCrossArrowOverlay() {
       [a.stx + vx * alongOff - pxv * perpOff, a.sty + vy * alongOff - pyv * perpOff],
       [a.stx + vx * (perpOff * 2.5 + alongOff), a.sty + vy * (perpOff * 2.5 + alongOff)],
     ];
-    let bestIdx = candidates.length - 1;                   // fallback: ostatnia (jak w Studio)
+    let bestIdx = 0;
     for (let ci = 0; ci < candidates.length; ci++) {
       const tbx = candidates[ci][0] - 2, tby = candidates[ci][1] - th / 2;
       let collision = false;
@@ -355,7 +336,8 @@ function drawCrossArrowOverlay() {
         const rx = toSX(r.x), ry = toSY(-r.y);
         if (tbx + tw > rx - rh && tbx < rx + rh && tby + th > ry - rh && tby < ry + rh) { collision = true; break; }
       }
-      if (!collision) { bestIdx = ci; break; }
+      bestIdx = ci;                                        // fallback: ostatnia (jak w Studio)
+      if (!collision) break;
     }
     let lx = candidates[bestIdx][0], ly = candidates[bestIdx][1];
     let bx = lx - 2, by = ly - th / 2;
@@ -374,135 +356,241 @@ function drawCrossArrowOverlay() {
   }
 }
 
+// ── model-driven drawing (ArkMap Studio 1:1 via A.RENDER_MODEL) ─────────────
+
+function _planeFor(room) {
+  const entry = roomIdx.get(room.id);
+  return { byId: modelById, areaOf: modelAreaOf, areaId: entry ? entry.areaId : null, z: room.z ?? 0 };
+}
+
+// Studio drawExits + drawStubs + drawCustomLines (full LOD): edge-to-edge
+// lines, one-way dashed + red head, doors as DOOR_RGB squares, data stubs,
+// custom lines (incl. special exits), suppressors; cross-area exits become
+// arrows here (map space) and get labels later in drawCrossArrowOverlay.
+function drawExitsModel(vis, cellPx) {
+  const RM = A.RENDER_MODEL;
+  const crossArrows = [];
+  const drawArrow = (op) => {
+    ctx.strokeStyle = op.color; ctx.lineWidth = op.width; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(op.line[0], op.line[1]); ctx.lineTo(op.line[2], op.line[3]); ctx.stroke();
+    ctx.fillStyle = op.color;
+    ctx.beginPath();
+    ctx.moveTo(op.head[0][0], op.head[0][1]);
+    ctx.lineTo(op.head[1][0], op.head[1][1]);
+    ctx.lineTo(op.head[2][0], op.head[2][1]);
+    ctx.closePath(); ctx.fill();
+  };
+  for (const room of vis) {
+    const plane = _planeFor(room);
+    for (const [dir, tgt] of Object.entries(room.exits || {})) {
+      const cls = RM.classifyExit(room, dir, tgt, plane);
+      if (cls.kind === 'line' || cls.kind === 'oneway') {
+        const op = RM.exitLineOp(room, cls.target, RM.DIR_VEC[dir], cellPx, cls.kind === 'oneway');
+        ctx.strokeStyle = op.color; ctx.lineWidth = op.width; ctx.setLineDash(op.dash);
+        ctx.beginPath(); ctx.moveTo(op.line[0], op.line[1]); ctx.lineTo(op.line[2], op.line[3]); ctx.stroke();
+        ctx.setLineDash([]);
+        if (op.head) {
+          ctx.fillStyle = op.head.fill; ctx.strokeStyle = op.head.outline; ctx.lineWidth = op.width;
+          ctx.beginPath();
+          ctx.moveTo(op.head.tip[0], op.head.tip[1]);
+          ctx.lineTo(op.head.base1[0], op.head.base1[1]);
+          ctx.lineTo(op.head.base2[0], op.head.base2[1]);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+        }
+        const door = (room.doors || {})[dir];
+        if (door) {   // Studio: door square at the midpoint of the drawn line
+          const d = RM.doorSquareOp((op.line[0] + op.line[2]) / 2, (op.line[1] + op.line[3]) / 2, door, cellPx);
+          ctx.strokeStyle = d.color; ctx.lineWidth = d.width; ctx.setLineDash([]);
+          ctx.strokeRect(d.cx - d.side / 2, d.cy - d.side / 2, d.side, d.side);
+        }
+      } else if (cls.kind === 'cross') {
+        const op = RM.crossArrowOp(room, RM.DIR_VEC[dir], cls.target, colorCache, cellPx);
+        if (op) {
+          drawArrow(op);
+          crossArrows.push({ op, targetId: tgt, target: cls.target,
+            areaName: cls.target ? (roomIdx.get(tgt)?.areaName || '') : '' });
+        }
+      }
+      // 'custom' / 'suppressed' -> custom-lines pass below; 'udio' / 'crossZ' / 'skip' -> nothing
+    }
+    // cross-area SPECIAL exits (Studio 8523-8540)
+    for (const sc of RM.specialCrossArrows(room, plane, colorCache, cellPx)) {
+      drawArrow(sc.op);
+      crossArrows.push({ op: sc.op, targetId: sc.targetId, target: sc.target,
+        areaName: roomIdx.get(sc.targetId)?.areaName || '' });
+    }
+    // stubs from DATA (Studio drawStubs)
+    for (const st of RM.stubOps(room, cellPx)) {
+      ctx.strokeStyle = st.color; ctx.lineWidth = st.width; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(st.line[0], st.line[1]); ctx.lineTo(st.line[2], st.line[3]); ctx.stroke();
+    }
+    // custom lines (Studio drawCustomLines) — incl. special exits and u/d;
+    // empty points = suppressor (nothing drawn)
+    for (const [dir, cl] of Object.entries(room.custom_lines || {})) {
+      if (!cl.points || !cl.points.length) continue;
+      const op = RM.customLineOp(room, dir, cl, cellPx);
+      ctx.strokeStyle = op.color; ctx.lineWidth = op.width; ctx.setLineDash(op.dash);
+      ctx.beginPath();
+      ctx.moveTo(op.points[0][0], op.points[0][1]);
+      for (let i = 1; i < op.points.length; i++) ctx.lineTo(op.points[i][0], op.points[i][1]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (op.door) {
+        ctx.strokeStyle = op.door.color; ctx.lineWidth = op.door.width;
+        ctx.strokeRect(op.door.cx - op.door.side / 2, op.door.cy - op.door.side / 2, op.door.side, op.door.side);
+      }
+      if (op.arrow) {
+        ctx.fillStyle = op.arrow.color;
+        ctx.beginPath();
+        ctx.moveTo(op.arrow.tip[0], op.arrow.tip[1]);
+        ctx.lineTo(op.arrow.base1[0], op.arrow.base1[1]);
+        ctx.lineTo(op.arrow.base2[0], op.arrow.base2[1]);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+  return crossArrows;
+}
+
+// Studio drawRooms: stack shadows behind, then room squares (clamped rs,
+// hidden faded/dashed, custom border), inner u/d/i/o triangles, symbols, ✦
+function drawRoomsModel(vis, cellPx) {
+  const RM = A.RENDER_MODEL;
+  for (const room of vis) {
+    for (const sh of RM.stackShadowsOp(room, cellPx) || []) {
+      ctx.strokeStyle = sh.color; ctx.lineWidth = sh.width; ctx.setLineDash([]);
+      ctx.strokeRect(sh.x, sh.y, sh.size, sh.size);
+    }
+  }
+  for (const room of vis) {
+    const ro = RM.roomOp(room, colorCache, cellPx, 'faded');
+    if (ro.skip) continue;
+    ctx.save();
+    ctx.globalAlpha = ro.alpha;
+    ctx.fillStyle = ro.fill;
+    ctx.fillRect(ro.x - ro.half, ro.y - ro.half, ro.half * 2, ro.half * 2);
+    ctx.strokeStyle = ro.border; ctx.lineWidth = ro.borderWidth; ctx.setLineDash(ro.dash);
+    ctx.strokeRect(ro.x - ro.half, ro.y - ro.half, ro.half * 2, ro.half * 2);
+    ctx.setLineDash([]);
+    for (const tri of RM.innerTrianglesOp(room, colorCache, cellPx) || []) {
+      ctx.fillStyle = tri.fill; ctx.strokeStyle = tri.stroke; ctx.lineWidth = tri.width;
+      ctx.beginPath();
+      ctx.moveTo(tri.points[0][0], tri.points[0][1]);
+      ctx.lineTo(tri.points[1][0], tri.points[1][1]);
+      ctx.lineTo(tri.points[2][0], tri.points[2][1]);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    const sym = RM.symbolOp(room, colorCache, cellPx);
+    if (sym) drawGlyph(sym);
+    const se = RM.seMarkerOp(room, colorCache, cellPx);
+    if (se) drawGlyph(se);
+    ctx.restore();
+  }
+}
+
+// Studio LOD roomsOnly (drawExitsLite + drawRooms): one batched path of
+// center-to-center lines rgba(225,225,225,0.45), two-way dedup lower id,
+// one-way always; rooms keep full vector detail (zoom gates apply).
+function drawRoomsOnly(vis, cellPx) {
+  const RM = A.RENDER_MODEL;
+  ctx.beginPath();
+  let n = 0;
+  const seen = new Set();
+  for (const room of vis) {
+    const plane = _planeFor(room);
+    for (const [dir, tgt] of Object.entries(room.exits || {})) {
+      const cls = RM.classifyExit(room, dir, tgt, plane);
+      if (cls.kind !== 'line' && cls.kind !== 'oneway') continue;
+      if (cls.kind === 'line') {
+        const key = room.id < tgt ? room.id + '>' + tgt : tgt + '>' + room.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      ctx.moveTo(room.x, -room.y); ctx.lineTo(cls.target.x, -cls.target.y); n++;
+    }
+  }
+  if (n) {
+    ctx.strokeStyle = 'rgba(225,225,225,0.45)';
+    ctx.lineWidth = Math.max(0.5, (cellPx / RM.CELL) * 0.5) / cellPx;
+    ctx.setLineDash([]);
+    ctx.stroke();
+  }
+  drawRoomsModel(vis, cellPx);
+}
+
+// Studio LOD raster (_buildRoomsRaster + drawRoomsRaster): one cell per map
+// unit, exit lines alpha 140 under rooms, Y-flip, hidden faded 89; nearest
+// neighbor blit. Cached per map+scope.
+function drawRasterModel(vis, cellPx) {
+  const RM = A.RENDER_MODEL;
+  const key = mapSeq + '|' + scope.areaId + '|' + scope.z;
+  if (!rasterCache || rasterCache.key !== key) {
+    const ras = RM.rasterModel(vis, modelById, colorCache, 'faded');
+    const off = document.createElement('canvas');
+    off.width = ras.cols; off.height = ras.rows;
+    off.getContext('2d').putImageData(new ImageData(ras.buf, ras.cols, ras.rows), 0, 0);
+    rasterCache = { key, canvas: off, minX: ras.minX, maxY: ras.maxY, cols: ras.cols, rows: ras.rows };
+  }
+  const c = rasterCache;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(c.canvas, c.minX - 0.5, -c.maxY - 0.5, c.cols, c.rows);
+  ctx.restore();
+}
+
 function draw() {
   zoomPct.textContent = Math.round(view.scale / (lastFitScale || view.scale) * 100) + '%';
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
   if (!map) { drawMinimap(); drawRouteOv(); return; }
+  const RM = A.RENDER_MODEL;
   const W = cv.width / devicePixelRatio, H = cv.height / devicePixelRatio;
+  const cellPx = view.scale;              // px per map unit == Studio CELL*zoom
   ctx.save();
   ctx.translate(W / 2 + view.x, H / 2 + view.y);
   ctx.scale(view.scale, view.scale);
 
-  // subtle background grid when zoomed in (like the studio)
-  if (view.scale >= 6) {
+  const vis = roomsInScope();
+  const visIds = new Set(vis.map(r => r.id));
+
+  // Studio drawGrid: 1-unit world grid, alpha tiers by cellPx, 1px lines
+  const grid = RM.gridStyle(cellPx);
+  if (grid && vis.length) {
     const x0 = Math.floor(-(W / 2 + view.x) / view.scale), x1 = Math.ceil((W / 2 - view.x) / view.scale);
     const y0 = Math.floor(-(H / 2 + view.y) / view.scale), y1 = Math.ceil((H / 2 - view.y) / view.scale);
-    ctx.strokeStyle = 'rgba(255,255,255,0.045)'; ctx.lineWidth = 0.04;
+    ctx.strokeStyle = `rgba(255,255,255,${grid.alpha})`; ctx.lineWidth = grid.widthPx / cellPx;
+    ctx.setLineDash([]);
     ctx.beginPath();
     for (let x = x0; x <= x1; x++) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
     for (let y = y0; y <= y1; y++) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
     ctx.stroke();
   }
 
-  const vis = roomsInScope();
-  const visIds = new Set(vis.map(r => r.id));
+  // Studio computeLodMode; the raster is a single-plane structure, so the
+  // 'all' scope degrades to roomsOnly (vector), never a wrong bitmap
+  let mode = RM.lodMode(vis.length, cellPx, W, H);
+  if (mode === 'raster' && (scope.areaId === 'all' || scope.z === null)) mode = 'roomsOnly';
+  if (mode === 'raster' && (typeof ImageData === 'undefined' || typeof document.createElement !== 'function')) mode = 'roomsOnly';
 
-  // map labels below rooms (show_on_top drawn later, above rooms)
+  if (mode !== 'full') {
+    if (mode === 'raster') drawRasterModel(vis, cellPx); else drawRoomsOnly(vis, cellPx);
+    ctx.restore();
+    _lastCrossArrows = [];
+    globalThis.__arkmapCrossArrows = _lastCrossArrows;
+    globalThis.__arkmapView = view;
+    drawMinimap();
+    drawRouteOv();
+    return;
+  }
+
+  // Studio layer order: exits -> stubs -> custom lines -> labels (under)
+  // -> rooms (+details) -> [cross labels post-restore] -> labels on top
+  _lastCrossArrows = drawExitsModel(vis, cellPx);
+  globalThis.__arkmapCrossArrows = _lastCrossArrows;   // hak smoke-harnessa
+  globalThis.__arkmapView = view;                      // hak smoke-harnessa (aktualny zoom/przesuniecie)
+
   drawMapLabels(false);
-
-  // exits: full lines inside the scope, short gray stubs for connections leaving it;
-  // collect cross-area exits (different area) — drawCrossArrowOverlay() draws the arrows
-  // PO restore, w pikselach ekranu, 1:1 jak ArkMap Studio
-  ctx.lineWidth = 0.14; ctx.strokeStyle = '#565e6b';
-  const crossArrows = [];
-  for (const room of vis) {
-    const srcArea = roomIdx.get(room.id)?.areaId;
-    for (const [dir, tgt] of Object.entries(room.exits || {})) {
-      const d = DELTA[dir];
-      const t = roomIdx.get(tgt);
-      if (t && visIds.has(t.room.id)) {
-        ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(t.room.x, -t.room.y); ctx.stroke();
-      } else if (t && d && t.areaId !== srcArea) {
-        crossArrows.push({ room, sv: [d[0], -d[1]], tgt, env: t.room.env, areaName: t.areaName });
-      } else if (d) {
-        ctx.beginPath(); ctx.moveTo(room.x, -room.y); ctx.lineTo(room.x + d[0] * 0.45, -(room.y + d[1] * 0.45)); ctx.stroke();
-      }
-    }
-    // special exits to known rooms in ANOTHER area: arrow toward the target
-    for (const [, tgt] of Object.entries(room.special_exits || {})) {
-      const t = roomIdx.get(tgt);
-      if (!t || visIds.has(t.room.id) || t.areaId === srcArea) continue;
-      const sv = [t.room.x - room.x, -(t.room.y - room.y)];
-      if (!sv[0] && !sv[1]) continue;
-      crossArrows.push({ room, sv, tgt, env: t.room.env, areaName: t.areaName });
-    }
-  }
-  // arrow geometry: room edge (ray-square intersection) + unit vector
-  for (const a of crossArrows) {
-    const len = Math.hypot(a.sv[0], a.sv[1]);
-    if (!len) continue;
-    const ux = a.sv[0] / len, uy = a.sv[1] / len;
-    const tEdge = 0.36 / Math.max(Math.abs(ux), Math.abs(uy));
-    a.ux = ux; a.uy = uy;
-    a.x1 = a.room.x + ux * tEdge; a.y1 = -a.room.y + uy * tEdge;
-    a.targetId = a.tgt;
-  }
-  _lastCrossArrows = crossArrows;
-  globalThis.__arkmapCrossArrows = crossArrows;   // hak smoke-harnessa
-  globalThis.__arkmapView = view;                 // hak smoke-harnessa (aktualny zoom/przesuniecie)
-
-  // doors: tick across the exit line midpoint (simple demo style)
-  ctx.strokeStyle = '#c8d0dc'; ctx.lineWidth = 0.12;
-  for (const room of vis) {
-    for (const dir of Object.keys(room.doors || {})) {
-      const d = DELTA[dir]; if (!d) continue;
-      const tgt = (room.exits || {})[dir];
-      const t = tgt !== undefined ? roomIdx.get(tgt) : null;
-      const mx = room.x + d[0] * (t && visIds.has(t.room.id) ? (t.room.x - room.x) : 0.45) / 2;
-      const my = -(room.y + d[1] * (t && visIds.has(t.room.id) ? (t.room.y - room.y) : 0.45) / 2);
-      const px = -d[1] * 0.14, py = d[0] * 0.14;   // perpendicular tick
-      ctx.beginPath(); ctx.moveTo(mx - px, my - py); ctx.lineTo(mx + px, my + py); ctx.stroke();
-    }
-  }
-
-  // rooms as squares (Mudlet style) + symbols + inner-exit triangles
-  const rs = 0.36;                       // room half-size
-  const showSymbols = view.scale * rs * 2 >= 9;   // symbol legible
-  for (const room of vis) {
-    const x = room.x, y = -room.y;
-    ctx.fillStyle = envColor(room.env, map.colors);
-    ctx.fillRect(x - rs, y - rs, rs * 2, rs * 2);
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.05;
-    ctx.strokeRect(x - rs, y - rs, rs * 2, rs * 2);
-
-    const ex = room.exits || {};
-    const R = rs / 5;
-    const gcol = glyphColor(room);
-    const polys = {
-      up:   [[x, y + rs / 4, 0]],
-      down: [[x, y - rs / 4, Math.PI]],
-      in:   [[x - rs / 4, y, Math.PI / 2], [x + rs / 4, y, -Math.PI / 2]],
-      out:  [[x - rs / 4, y, -Math.PI / 2], [x + rs / 4, y, Math.PI / 2]],
-    };
-    for (const dir of ['up', 'down', 'in', 'out']) {
-      if (ex[dir] === undefined) continue;
-      const door = (room.doors || {})[dir];
-      ctx.fillStyle = gcol;
-      ctx.strokeStyle = door ? '#fbbf24' : gcol;
-      ctx.lineWidth = 0.05;
-      for (const [px, py, rot] of polys[dir]) innerTri(x, y, px, py, rot, R);
-    }
-
-    if (showSymbols && room.symbol) {
-      const fs = rs * 1.15;
-      ctx.font = `${fs}px monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 0.09; ctx.strokeStyle = 'rgba(20,23,28,0.85)';
-      ctx.strokeText(room.symbol, x, y);
-      ctx.fillStyle = '#f2f5fa';
-      ctx.fillText(room.symbol, x, y);
-    }
-    // special-exit marker (jak w ArkMap Studio)
-    if (showSymbols && room.special_exits && Object.keys(room.special_exits).length) {
-      ctx.font = `bold ${rs * 0.9}px monospace`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-      ctx.fillStyle = gcol;
-      ctx.fillText('✦', x + rs * 0.95, y - rs * 0.95);
-    }
-  }
-
-  // map labels above rooms (show_on_top), before the route overlay
+  drawRoomsModel(vis, cellPx);
   drawMapLabels(true);
 
   // route overlay: per leg (segments between waypoints); hops (transport) dashed
@@ -526,6 +614,7 @@ function draw() {
 
   // highlight: route start (blue), route end (red), intermediate waypoints
   // (color cycle as on the route minimap), search result (white-orange)
+  const rs = RM.ROOM_HALF;
   const ring = (room, color) => {
     ctx.strokeStyle = color; ctx.lineWidth = 0.22;
     ctx.strokeRect(room.x - rs - 0.14, -room.y - rs - 0.14, (rs + 0.14) * 2, (rs + 0.14) * 2);
@@ -552,7 +641,7 @@ function draw() {
   }
   ctx.restore();
 
-  drawCrossArrowOverlay();   // arrows + labels in screen px, after restore — 1:1 as in Studio
+  drawCrossArrowOverlay();   // cross-area labels in screen px — 1:1 as in Studio
 
   drawMinimap();
   drawRouteOv();
@@ -1311,6 +1400,11 @@ function drawRouteOv() {
 function afterLoad(msg, cls) {
   scope.z = null;   // nowa mapa -> populateSelectors wybierze domyslny (najludniejszy) poziom
   roomIdx = A.buildIndex(map);
+  colorCache = A.RENDER_MODEL.buildColorCache(map);
+  modelById = new Map(); modelAreaOf = new Map(); mapSeq++;
+  for (const area of map?.areas || []) for (const room of area.rooms || []) {
+    modelById.set(room.id, room); modelAreaOf.set(room.id, area.id);
+  }
   routeStart = routeEnd = highlightRoom = null;
   routeVias = []; routeLegs = []; planComplete = true; planTotal = 0;
   startEl.value = endEl.value = codeEl.value = '';

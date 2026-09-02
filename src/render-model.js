@@ -45,6 +45,17 @@ const UDIO_DIRS = ['up', 'down', 'in', 'out'];
 
 function _css(rgb) { return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; }
 function _u(px, cellPx) { return px / cellPx; }   // Studio screen px -> map units
+// Studio clamps the room square to a 2px minimum: rs = max(2, ROOM_SIZE*cpx()).
+// Every room-size-derived measure (edges, heads, doors, triangles, symbols,
+// stubs) uses the clamped rs. Inactive at cellPx >= ~3.08.
+function _rsPx(cellPx) { return Math.max(2, ROOM_UNITS * cellPx); }
+function _rsUnits(cellPx) { return _rsPx(cellPx) / cellPx; }
+// Studio _qtColorToCss (8117): Mudlet stores Qt #AARRGGBB, CSS reads #RRGGBBAA.
+function _qtCss(value) {
+  const m = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{6})$/.exec(String(value).trim());
+  if (!m) return value;
+  return m[1].toLowerCase() === 'ff' ? ('#' + m[2]) : ('#' + m[2] + m[1]);
+}
 
 // ─── colors ─────────────────────────────────────────────────────────────────
 // Studio buildColorCache (7221-7241): implicit ANSI 1-255 (Mudlet offset
@@ -173,7 +184,7 @@ function lineWidthUnits(cellPx) {
 // by zoom > 0.3 (line stays dashed below it).
 function exitLineOp(room, target, vec, cellPx, oneWay) {
   const svec = [vec[0], -vec[1]];   // data-space dir -> screen (Y negated)
-  const half = ROOM_HALF;
+  const half = _rsUnits(cellPx) / 2;
   const [x1, y1] = edgePoint(room.x, -room.y, half, svec);
   let x2, y2;
   if (oneWay) { x2 = target.x; y2 = -target.y; }
@@ -183,7 +194,7 @@ function exitLineOp(room, target, vec, cellPx, oneWay) {
   const z = cellPx / CELL;
   op.dash = [_u(Math.max(2, z * 1.8), cellPx), _u(Math.max(1, z * 0.9), cellPx)];
   if (z > 0.3) {
-    const rsPx = ROOM_UNITS * cellPx;
+    const rsPx = _rsPx(cellPx);
     const L = _u(Math.max(6, rsPx * 0.83), cellPx);
     const Wh = _u(Math.max(3, rsPx * 0.29), cellPx);
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
@@ -204,7 +215,7 @@ function exitLineOp(room, target, vec, cellPx, oneWay) {
 function crossArrowOp(room, vec, target, cache, cellPx) {
   if (cellPx < CELL * 0.25) return null;
   const svec = [vec[0], -vec[1]];   // data-space dir -> screen (Y negated)
-  const rsPx = ROOM_UNITS * cellPx;
+  const rsPx = _rsPx(cellPx);
   const tickLen = _u(Math.max(4, rsPx * 0.9), cellPx);
   const hw = _u(Math.max(1.5, rsPx * 0.35), cellPx);
   const [ex, ey] = edgePoint(room.x, -room.y, ROOM_HALF, svec);
@@ -227,7 +238,7 @@ function stubOps(room, cellPx) {
     const vec = DIR_VEC[dir];
     if (!vec || (!vec[0] && !vec[1])) continue;
     const svec = [vec[0], -vec[1]];
-    const [ex, ey] = edgePoint(room.x, -room.y, ROOM_HALF, svec);
+    const [ex, ey] = edgePoint(room.x, -room.y, _rsUnits(cellPx) / 2, svec);
     out.push({ dir, line: [ex, ey, ex + svec[0] * 0.5, ey + svec[1] * 0.5], width: lineWidthUnits(cellPx), color: LINE_CSS });
   }
   return out;
@@ -285,7 +296,7 @@ function customLineOp(room, dir, cl, cellPx) {
 // the line midpoint, width max(1, zoom*0.8) px.
 function doorSquareOp(mx, my, doorState, cellPx) {
   const z = cellPx / CELL;
-  const side = _u((ROOM_UNITS * cellPx) / 2, cellPx);   // = ROOM_UNITS / 2
+  const side = _u(_rsPx(cellPx) / 2, cellPx);   // Studio: sq = rs/2 (clamped rs)
   return { cx: mx, cy: my, side, color: DOOR_CSS[doorState] || DOOR_CSS.locked, width: _u(Math.max(1, z * 0.8), cellPx) };
 }
 
@@ -296,14 +307,25 @@ function doorSquareOp(mx, my, doorState, cellPx) {
 function roomOp(room, cache, cellPx, hiddenMode) {
   const hs = hiddenRoomStyle(room, hiddenMode);
   const z = cellPx / CELL;
+  const rsPx = _rsPx(cellPx);
+  // Studio ZAD6: per-room custom border wins over the default
+  // (user_data room.ui_borderColor Qt #AARRGGBB, room.ui_borderThickness 1..10)
+  const ud = room?.user_data || {};
+  const bc = ud['room.ui_borderColor'] ? _qtCss(ud['room.ui_borderColor']) : null;
+  let bt = parseInt(ud['room.ui_borderThickness'], 10);
+  bt = Number.isFinite(bt) ? Math.min(10, Math.max(1, bt)) : null;
+  let border = LINE_CSS, borderWidth;
+  if (bc) { border = bc; borderWidth = _u(Math.max(hs.dashed ? 1.3 : 0.4, z * 0.4875 * (bt || 1)), cellPx); }
+  else if (hs.dashed) borderWidth = _u(Math.max(1.4, z * 1.4), cellPx);
+  else borderWidth = _u(Math.max(0.4, z * 0.4875), cellPx);
   return {
-    x: room.x, y: -room.y, half: ROOM_HALF,
+    x: room.x, y: -room.y, half: rsPx / 2 / cellPx,
     fill: roomColorCss(cache, room.env),
-    border: LINE_CSS,
-    borderWidth: hs.dashed ? _u(Math.max(1.4, z * 1.4), cellPx) : _u(Math.max(0.4, z * 0.4875), cellPx),
+    border,
+    borderWidth,
     alpha: hs.alpha,
     dashed: hs.dashed,
-    dash: hs.dashed ? [_u(Math.max(4, ROOM_UNITS * cellPx * 0.34), cellPx), _u(Math.max(3, ROOM_UNITS * cellPx * 0.24), cellPx)] : [],
+    dash: hs.dashed ? [_u(Math.max(4, rsPx * 0.34), cellPx), _u(Math.max(3, rsPx * 0.24), cellPx)] : [],
     skip: hs.skip,
   };
 }
@@ -315,8 +337,9 @@ function innerTrianglesOp(room, cache, cellPx) {
   if (cellPx / CELL <= 0.25) return null;
   const z = cellPx / CELL;
   const ex = room.exits || {};
-  const R = ROOM_UNITS / 5;
-  const off = ROOM_UNITS / 4;
+  const rsU = _rsUnits(cellPx);
+  const R = rsU / 5;
+  const off = rsU / 4;
   const cx = room.x, cy = -room.y;
   const polys = {
     up: [[cx, cy + off, 0]],
@@ -350,7 +373,7 @@ function symbolOp(room, cache, cellPx) {
   if (z <= 0.8) return null;
   const sym = room.symbol || room.user_data?.['system.fallback_symbol'] || '';
   if (!sym) return null;
-  const rsPx = ROOM_UNITS * cellPx;
+  const rsPx = _rsPx(cellPx);
   const cps = [...sym];
   const symW = cps.reduce((a, ch) => a + (ch.codePointAt(0) > 0xFFFF ? 1.0 : 0.6), 0);
   let sizePx;
@@ -358,7 +381,8 @@ function symbolOp(room, cache, cellPx) {
   else sizePx = Math.max(7, Math.round(rsPx * (cps.length > 1 ? 0.52 : 0.7)));
   if (sizePx < 7) return null;
   const col = symbolColorCss(room, cache);
-  const halo = contrastCss(col) === '#fff' ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.55)';
+  // Studio: halo contrasts with the GLYPH (light glyph -> dark halo)
+  const halo = contrastCss(col) === '#111' ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.55)';
   return {
     text: sym, x: room.x, y: -room.y,
     fontUnits: _u(sizePx, cellPx),
@@ -373,14 +397,16 @@ function seMarkerOp(room, cache, cellPx) {
   const z = cellPx / CELL;
   if (z <= 0.5) return null;
   if (!room.special_exits || !Object.keys(room.special_exits).length) return null;
-  const rsPx = ROOM_UNITS * cellPx;
+  const rsPx = _rsPx(cellPx);
+  const half = rsPx / 2 / cellPx;
   const mSz = Math.max(6, rsPx * 0.44);
   const mCol = contrastCss(roomColorCss(cache, room.env));
   const halo = mCol === '#fff' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.5)';
   return {
-    text: '✦', x: room.x + ROOM_HALF, y: -room.y - ROOM_HALF,
+    text: '✦', x: room.x + half, y: -room.y - half,
     fontUnits: _u(Math.round(mSz), cellPx),
     fill: mCol, halo, haloWidth: _u(Math.max(1, mSz * 0.15), cellPx),
+    anchor: 'end', baseline: 'top',   // Studio textAlign right / textBaseline top
   };
 }
 
@@ -459,4 +485,47 @@ function rasterModel(planeRooms, byId, cache, hiddenMode) {
   return { minX, maxY, cols, rows, buf };
 }
 
-export { CELL, ROOM_UNITS, ROOM_HALF, DEFAULT_ROOM_RGB, LINE_CSS, ONE_WAY_FILL, CROSS_UNKNOWN_CSS, CL_DEFAULT_CSS, DOOR_CSS, HIDDEN_FADE, RASTER_LINE_ALPHA, LOD_MIN_CELL_PX, LOD_ROOMS_BUDGET, LOD_RASTER_CELL_PX, DIR_VEC, OPP_DIR, UDIO_DIRS, buildColorCache, roomColorCss, roomColorRgb, isRoomHidden, hiddenRoomStyle, contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits, exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel };
+// Studio drawRooms pre-pass (8200-8226): "stack shadows" for multi-floor
+// rooms — the SIGNAL is the exit direction (up/down), not the target's Z.
+// zoom > 0.3; ghost square offset up-right (up) / down-left (down) by
+// max(2, rs*0.22) px, stroke rgba(130,205,255, min(0.7, zoom*0.5)).
+function stackShadowsOp(room, cellPx) {
+  const z = cellPx / CELL;
+  if (z <= 0.3) return null;
+  const ex = room.exits || {};
+  if (!exits_up_down(ex)) return null;
+  const rsU = _rsUnits(cellPx);
+  const half = rsU / 2;
+  const off = _u(Math.max(2, _rsPx(cellPx) * 0.22), cellPx);
+  const alpha = Math.min(0.7, z * 0.5);
+  const width = _u(Math.max(0.5, z * 0.7), cellPx);
+  const color = `rgba(130,205,255,${Math.round(alpha * 100) / 100})`;
+  const out = [];
+  const cx = room.x, cy = -room.y;
+  if (ex.up) out.push({ x: cx - half + off, y: cy - half - off, size: rsU, color, width });
+  if (ex.down) out.push({ x: cx - half - off, y: cy - half + off, size: rsU, color, width });
+  return out.length ? out : null;
+}
+function exits_up_down(ex) { return !!(ex.up || ex.down); }
+
+// Studio drawExits cross-area SPECIAL exits (8523-8540): a special exit to a
+// KNOWN room in ANOTHER area gets a cross arrow aimed at the target coords,
+// unless a custom line owns that command (hasCL). Same-area / unknown target:
+// no arrow. Returns [{ cmd, targetId, target, op }].
+function specialCrossArrows(room, plane, cache, cellPx) {
+  const out = [];
+  for (const [cmd, targetId] of Object.entries(room.special_exits || {})) {
+    if (room.custom_lines && room.custom_lines[cmd]) continue;
+    const target = plane.byId.get(targetId) || null;
+    if (!target) continue;
+    if (plane.areaOf.get(targetId) === plane.areaId) continue;
+    const dx = target.x - room.x, dy = target.y - room.y;
+    const len = Math.hypot(dx, dy);
+    if (!len) continue;
+    const op = crossArrowOp(room, [dx / len, dy / len], target, cache, cellPx);
+    if (op) out.push({ cmd, targetId, target, op });
+  }
+  return out;
+}
+
+export { CELL, ROOM_UNITS, ROOM_HALF, DEFAULT_ROOM_RGB, LINE_CSS, ONE_WAY_FILL, CROSS_UNKNOWN_CSS, CL_DEFAULT_CSS, DOOR_CSS, HIDDEN_FADE, RASTER_LINE_ALPHA, LOD_MIN_CELL_PX, LOD_ROOMS_BUDGET, LOD_RASTER_CELL_PX, DIR_VEC, OPP_DIR, UDIO_DIRS, buildColorCache, roomColorCss, roomColorRgb, isRoomHidden, hiddenRoomStyle, contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits, exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows };

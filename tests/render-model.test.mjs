@@ -10,7 +10,7 @@ import {
   buildColorCache, roomColorCss, isRoomHidden, hiddenRoomStyle, symbolColorCss,
   symbolFillCss, classifyExit, exitLineOp, crossArrowOp, stubOps, dashPattern,
   customLineOp, doorSquareOp, roomOp, innerTrianglesOp, symbolOp, seMarkerOp,
-  gridStyle, lodMode, rasterModel,
+  gridStyle, lodMode, rasterModel, stackShadowsOp, specialCrossArrows,
 } from '../src/render-model.js';
 
 const Z1 = CELL; // cellPx at zoom 1
@@ -284,4 +284,47 @@ test('determinism: same input -> identical ops', () => {
   const p = mkPlane([a, b]);
   const run = () => JSON.stringify(classifyExit(a, 'e', 2, p)) + JSON.stringify(exitLineOp(a, b, DIR_VEC.e, Z1, false));
   assert.equal(run(), run());
+});
+
+test('stackShadowsOp: up -> ghost up-right, down -> down-left, zoom gate 0.3', () => {
+  const r = R(1, 5, 5, { exits: { up: 2, down: 3 } });
+  assert.equal(stackShadowsOp(r, CELL * 0.3), null);
+  const ops = stackShadowsOp(r, Z1);
+  assert.equal(ops.length, 2);
+  const [up, dn] = ops;
+  const ctr = (o) => [o.x + o.size / 2, o.y + o.size / 2];
+  assert.ok(ctr(up)[0] > 5 && ctr(up)[1] < -5, 'up ghost up-right (screen)');
+  assert.ok(ctr(dn)[0] < 5 && ctr(dn)[1] > -5, 'down ghost down-left (screen)');
+  assert.equal(up.color, 'rgba(130,205,255,0.5)');
+  assert.equal(stackShadowsOp(R(2, 0, 0, { exits: { n: 9 } }), Z1), null);
+});
+
+test('specialCrossArrows: cross-area special exit gets an arrow, hasCL suppresses', () => {
+  const a = R(1, 0, 0, { special_exits: { 'zejdz': 10, 'skocz': 11 }, custom_lines: { 'skocz': { points: [[1, 1]] } } });
+  const t = R(10, 4, 3, { _area: 2 });
+  const sameArea = R(11, 2, 2);
+  const plane = mkPlane([a, t, sameArea]);
+  const cache = buildColorCache({ areas: [], colors: {} });
+  const out = specialCrossArrows(a, plane, cache, Z1);
+  assert.equal(out.length, 1, 'only cross-area without CL');
+  assert.equal(out[0].cmd, 'zejdz');
+  assert.ok(out[0].op.head, 'arrow head present');
+});
+
+test('symbolOp halo: light glyph -> dark halo, dark glyph -> light halo', () => {
+  const cache = buildColorCache({ areas: [], colors: { custom_env_colors: { 1: [250, 250, 250], 2: [5, 5, 5] } } });
+  const dark = symbolOp(R(1, 0, 0, { env: 1, symbol: 'X' }), cache, Z1);   // dark glyph on light room
+  const light = symbolOp(R(2, 0, 0, { env: 2, symbol: 'X' }), cache, Z1);  // light glyph on dark room
+  assert.equal(dark.fill, 'rgb(25,25,25)');
+  assert.equal(dark.halo, 'rgba(255,255,255,0.55)');
+  assert.equal(light.fill, 'rgb(225,255,255)');
+  assert.equal(light.halo, 'rgba(0,0,0,0.65)');
+});
+
+test('roomOp: custom border override (Qt color + thickness clamp)', () => {
+  const cache = buildColorCache({ areas: [], colors: {} });
+  const r = R(1, 0, 0, { user_data: { 'room.ui_borderColor': '#ff0a0b0c', 'room.ui_borderThickness': '3' } });
+  const op = roomOp(r, cache, Z1, 'faded');
+  assert.equal(op.border, '#0a0b0c', 'Qt #AARRGGBB -> #RRGGBB when alpha ff');
+  assert.ok(close(op.borderWidth, (0.4875 * 3) / CELL), 'width scales with thickness');
 });

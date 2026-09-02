@@ -46,6 +46,7 @@ globalThis.arkmap = {
     contrastCss, symbolColorCss, symbolFillCss, classifyExit, edgePoint, lineWidthUnits,
     exitLineOp, crossArrowOp, stubOps, dashPattern, customLineOp, doorSquareOp,
     roomOp, innerTrianglesOp, symbolOp, seMarkerOp, gridStyle, lodMode, rasterModel,
+    stackShadowsOp, specialCrossArrows,
   },
   ARKADIA_ENVS, ARKADIA_SYMBOLS, ARKADIA_ENV, envPaletteList,
   ANSI_PAL, ansiPaletteRgb, OPPOSITE,

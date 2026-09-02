@@ -448,6 +448,27 @@ non-edit display 1:1 — same classification, geometry, colors and zoom gates.
 Editor-only features (selection handles, edit markers beyond the default
 special-exit marker, drag previews) are intentionally out of scope.
 
+The whole surface is pure and zoom-parameterized — pass `cellPx` (px per map
+unit, i.e. `CELL` × zoom) and get plain op data back in map units:
+
+| group | API |
+|---|---|
+| color cache | `buildColorCache(map)` — env → RGB resolution chain (ANSI palette < Arkadia envs < `env_colors` < `custom_env_colors`); `roomColorCss(cache, env)` / `roomColorRgb(cache, env)` — room fill for an env id |
+| hidden rooms | `isRoomHidden(room)` · `hiddenRoomStyle(room, hiddenMode)` (`'hide'` \| `'faded'`) |
+| symbol colors | `contrastCss(cssColor)` — readable foreground for a fill · `symbolColorCss(room, cache)` / `symbolFillCss(room, cache)` — glyph color / inner-triangle fill |
+| exit classification | `classifyExit(room, dir, targetId, plane)` → `{ kind: 'custom' \| 'suppressed' \| 'skip' \| 'udio' \| 'cross' \| 'crossZ' \| 'oneway' \| 'line', ... }`, in Studio's `drawExits` precedence |
+| op builders | `roomOp(room, cache, cellPx, hiddenMode?)` · `exitLineOp(room, target, vec, cellPx, oneWay)` · `stubOps(room, cellPx)` · `customLineOp(room, dir, cl, cellPx)` · `doorSquareOp(mx, my, doorState, cellPx)` (non-string door states fall back to locked) · `innerTrianglesOp(room, cache, cellPx)` · `symbolOp(room, cache, cellPx)` · `seMarkerOp(room, cache, cellPx)` · `stackShadowsOp(room, cellPx)` — all return `null` when the Studio zoom gate closes the layer |
+| cross-area | `crossArrowOp(room, vec, target, cache, cellPx)` — env-colored arrow (unknown target → `CROSS_UNKNOWN_CSS`) · `specialCrossArrows(room, plane, cache, cellPx)` — arrows for special exits to known rooms in other areas · `crossExitEntries(room, plane, cache, cellPx)` — every cross-area exit (regular + special) with edge/anchor/direction; `op` is `null` when a custom line owns the direction, so area labels and dblclick hit-testing work even where no arrow is drawn |
+| helpers | `edgePoint(cx, cy, half, svec)` · `lineWidthUnits(cellPx)` · `dashPattern(style, cellPx)` · `gridStyle(cellPx)` |
+| LOD & raster | `lodMode(planeCount, cellPx, W, H)` → `'full'` \| `'roomsOnly'` \| `'raster'` · `rasterModel(planeRooms, byId, cache, hiddenMode?)` → RGBA bytes, one cell per map unit, exit lines under room cells |
+
+Constants: `CELL` (18 px per map unit at zoom 1) · `ROOM_UNITS` (0.65) /
+`ROOM_HALF` · `DIR_VEC` / `OPP_DIR` / `UDIO_DIRS` · `LINE_CSS`,
+`ONE_WAY_FILL`, `CROSS_UNKNOWN_CSS`, `CL_DEFAULT_CSS`, `DOOR_CSS`,
+`DEFAULT_ROOM_RGB` · `HIDDEN_FADE` (0.35) · LOD thresholds `LOD_MIN_CELL_PX`
+(9), `LOD_ROOMS_BUDGET` (200), `LOD_RASTER_CELL_PX` (3) ·
+`RASTER_LINE_ALPHA` (140).
+
 Parity is verified against the Studio original as an oracle: an op-stream
 diff over 1,008 scenarios (hand-written, a real-map slice and seeded fuzz)
 matches with zero differences, and a headless-Chromium pixel diff of the same
